@@ -1,0 +1,27 @@
+#!/bin/sh
+# Block commits whose staged changes look like they contain personal data.
+# Generic patterns live here; machine-specific literals live in the untracked
+# file local/private-patterns.txt (one extended regex per line).
+# Install: ln -s ../../.githooks/pre-commit .git/hooks/pre-commit
+# Bypass a confirmed false positive with: git commit --no-verify
+
+GENERIC='([0-9a-f]{2}:){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b|/home/[a-z]|SIGN=[0-9A-F"]|@[a-z0-9.-]+\.[a-z]{2,}'
+EXTRA_FILE="$(git rev-parse --show-toplevel)/local/private-patterns.txt"
+
+# Added lines only, without the diff header lines. The hook itself and the
+# licence texts are excluded: they contain the patterns or third-party addresses.
+added=$(git diff --cached --no-color -U0 -- . ':!.githooks/pre-commit' ':!LICENSES' |
+	grep -E '^\+' | grep -vE '^\+\+\+ ')
+
+hits=$(printf '%s\n' "$added" | grep -nEi -e "$GENERIC")
+if [ -s "$EXTRA_FILE" ]; then
+	extra=$(printf '%s\n' "$added" | grep -nEi -f "$EXTRA_FILE")
+	hits=$(printf '%s\n%s\n' "$hits" "$extra" | sed '/^$/d')
+fi
+
+if [ -n "$hits" ]; then
+	echo "pre-commit: possible personal data in staged changes:" >&2
+	printf '%s\n' "$hits" >&2
+	echo "Replace with placeholders, or use --no-verify for a false positive." >&2
+	exit 1
+fi

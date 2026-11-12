@@ -1,0 +1,21 @@
+version = 1
+
+# When several annotations match a file, the last one wins.
+
+# Default: scripts, units, rules and everything else not named below.
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "libero-for-arch contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Prose.
+[[annotations]]
+path = ["**.md", "docs/**"]
+SPDX-FileCopyrightText = "libero-for-arch contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# Files submitted to the AUR, plus repository housekeeping.
+[[annotations]]
+path = ["aur/PKGBUILD", "aur/.SRCINFO", "aur/**.install", ".gitignore", "REUSE.toml"]
+SPDX-FileCopyrightText = "libero-for-arch contributors"
+SPDX-License-Identifier = "0BSD"

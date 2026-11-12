@@ -1,0 +1,19 @@
+# Private, machine-specific values. Never commit.
+/local/
+
+# Vendor material: never commit binaries, archives, licences or installer scripts
+License.dat*
+*.lic
+*.7z
+*.bin
+*.run
+*.tar.gz
+*.zip
+installscript*.js
+Updates.xml
+
+# makepkg output
+/aur/src/
+/aur/pkg/
+*.pkg.tar*
+*.log
