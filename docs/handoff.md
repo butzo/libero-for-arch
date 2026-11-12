@@ -759,8 +759,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
-11. Run one full flow (synthesis, P&R, simulation, bitstream) to surface
-    missing libraries in the tools that have not run yet.
+11. Run the rest of one full flow (synthesis with its log captured,
+    simulation, programming) to surface missing libraries in the tools that
+    have not run yet. P&R and bitstream generation are done, see section 4.
 
 ## 10. Decisions left to the agent
 
