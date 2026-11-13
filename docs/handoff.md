@@ -392,9 +392,9 @@ afterwards, so the working machine is back to fix 3.
 Consequence for the package: provide that one file and leave the vendor tree
 unmodified. How to provide it (system file or per-process mount namespace,
 section 8) is still open; a real `/etc/redhat-release` may mislead other
-software on the host. Not yet tested under the fake file: synthesis,
-simulation, programming, and the vendor scripts in `Designer/bin/check_linux_req/`,
-which also read the file.
+software on the host. Synthesis also passed under the fake file (same day).
+Not yet tested under it: simulation, programming, and the vendor scripts in
+`Designer/bin/check_linux_req/`, which also read the file.
 
 ### Dependency list [verified by sweep 2026-11-13]
 
@@ -455,9 +455,12 @@ Place and route and bitstream generation (fabric and sNVM, exported as PPD)
 ran clean on 2026-11-12 with 2026.1.0.17 on a PolarFire design: no
 missing-library errors, only the cosmetic messages from row 6 **[verified]**.
 
+Synthesis ran clean on 2026-11-13 under the fake `redhat-release` setup
+(Synplify Pro Y-2026.03M, licence `synplifypro_actel` checked out from the
+local server, exit status 0, no library errors) **[verified]**.
+
 Not yet exercised at all: simulation (ModelSim/QuestaSim), SmartHLS, actual
-programming. Synthesis (Synplify) must have run for place and route to start,
-but no log of it was captured **[inferred]**.
+programming.
 
 ## 5. Licensing
 
@@ -847,9 +850,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
-11. Run the rest of one full flow (synthesis with its log captured,
-    simulation, programming) to surface missing libraries in the tools that
-    have not run yet. P&R and bitstream generation are done, see section 4.
+11. Run the rest of one full flow (simulation, programming) to surface
+    missing libraries in the tools that have not run yet. Synthesis, P&R and
+    bitstream generation are done, see section 4.
 
 ## 10. Decisions left to the agent
 
