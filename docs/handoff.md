@@ -393,8 +393,13 @@ find /opt/microchip/Libero_SoC_2026.1 -type f -executable -exec sh -c \
 Caveat: `ldd` without the launcher's `LD_LIBRARY_PATH` reports bundled
 libraries as missing. Filter out sonames that exist anywhere in the tree.
 
-Not yet exercised at all: synthesis (Synplify), place and route, simulation
-(ModelSim/QuestaSim), SmartHLS, bitstream generation, actual programming.
+Place and route and bitstream generation (fabric and sNVM, exported as PPD)
+ran clean on 2026-11-12 with 2026.1.0.17 on a PolarFire design: no
+missing-library errors, only the cosmetic messages from row 6 **[verified]**.
+
+Not yet exercised at all: simulation (ModelSim/QuestaSim), SmartHLS, actual
+programming. Synthesis (Synplify) must have run for place and route to start,
+but no log of it was captured **[inferred]**.
 
 ## 5. Licensing
 
