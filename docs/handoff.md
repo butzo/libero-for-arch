@@ -363,7 +363,7 @@ Each row is a failure that was hit, in order.
 | 3 | `.../lib64/rhel/libstdc++.so.6: version GLIBCXX_3.4.30 not found (required by /usr/lib64/libicuuc.so.78)` | In `Designer/lib64/rhel/`: rename `libstdc++.so.6` to `.orig`, symlink to `/usr/lib/libstdc++.so.6` | [verified] |
 | 4 | `qt.qpa.plugin: Could not find the Qt platform plugin "wayland"` | `QT_QPA_PLATFORM=xcb` (bundled Qt ships xcb only; needs XWayland) | [verified] |
 | 5 | Log: `Download Error: error setting certificate verify locations: CAfile: /etc/pki/tls/certs/ca-bundle.crt` | `ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt` | [verified] |
-| 6 | `cat: /etc/redhat-release: No such file` plus "unsupported Alma Linux" warning | none, cosmetic | [verified] |
+| 6 | `cat: /etc/redhat-release: No such file` plus "unsupported Alma Linux" warning | cosmetic if left alone; a fake `/etc/redhat-release` removes it and makes fix 3 unnecessary, see below | [verified] |
 | 7 | FlexLM: `Can't make directory /usr/tmp/.flexlm` | cosmetic; `ln -s /var/tmp /usr/tmp` silences it (not applied) | [verified] cosmetic, fix [untested] |
 | 8 | Programmer visible in `lsusb`, not usable | udev rule with `uaccess`, see section 6 | [verified] |
 
@@ -373,17 +373,75 @@ libraries **[inferred, consistent with the error]**. The same conflict may
 exist in other tools' private lib directories (Synplify, ModelSim, programmer)
 **[inferred]**.
 
-### Dependency list: mostly unverified
+### A fake `redhat-release` replaces fixes 3 and 6 [verified 2026-11-13]
 
-Verified needed: `libpng15` (AUR, installer only), `libxml2-legacy`,
-`xorg-xwayland`.
+`Designer/bin64/actel_setup_vars_nomotif` is sourced at every tool start. It
+runs `cat /etc/redhat-release | grep ...` without checking that the file
+exists (the source of the repeated `cat:` errors), prints the "unsupported
+Alma Linux" warning as its last fallback, and then builds `LD_LIBRARY_PATH`:
+if the file contains `AlmaLinux release 9` (or the host is RHEL 9 or
+Ubuntu 24) the bundled `lib64/rhel` directory is left off the path; otherwise
+it is prepended, which is what pulls in the old bundled libstdc++.
 
-Guessed, never confirmed: `libxcrypt-compat`, `ncurses5-compat-libs` (AUR),
-`openmotif` (AUR), `lib32-libpng12` (AUR), `libusb-compat`, X11 bitmap fonts,
-`ttf-liberation`, a set of `lib32-*` libraries, locale `en_US.UTF-8`.
+Test: `/etc/redhat-release` containing `AlmaLinux release 9.6 (Sage Margay)`,
+with the original bundled `lib64/rhel/libstdc++.so.6` restored in place of the
+symlink. Libero started, place and route completed, no `cat:` lines, no
+unsupported-OS warning, no `GLIBCXX` error. Both changes were reverted
+afterwards, so the working machine is back to fix 3.
 
-The full sweep was never run. Run it and map sonames to packages with
-`pacman -F`:
+Consequence for the package: provide that one file and leave the vendor tree
+unmodified. How to provide it (system file or per-process mount namespace,
+section 8) is still open; a real `/etc/redhat-release` may mislead other
+software on the host. Not yet tested under the fake file: synthesis,
+simulation, programming, and the vendor scripts in `Designer/bin/check_linux_req/`,
+which also read the file.
+
+### Dependency list [verified by sweep 2026-11-13]
+
+Method: for every ELF file under `Libero_SoC/` (128,291 files scanned), read
+the direct requirements (`objdump -p`, `NEEDED`), drop every name that exists
+anywhere in the vendor tree, and map the rest to the owning installed package
+with `pacman -Qo`. Result: 91 system libraries from 52 packages, plus 5 names
+found nowhere. SmartHLS was not scanned (excluded by decision).
+
+Packages a desktop Arch install is unlikely to have already:
+
+| Package | Needed by | Source |
+|---|---|---|
+| `libxml2-legacy` | Designer, Synplify, QuestaSim (21 files) | official repos |
+| `libxcrypt-compat` | Designer, Synplify, Identify | official repos |
+| `gtk2` | Synplify, Identify, a few Designer wx libraries | repo on CachyOS; check plain Arch |
+| `ncurses5-compat-libs` | Identify, QuestaSim | repo on CachyOS; check plain Arch |
+| `lib32-glibc` | 32-bit ModelSim binaries, a few QuestaSim files | multilib |
+| `numactl`, `libtirpc` | QuestaSim | official repos |
+| `gperftools` | Synplify, Identify | official repos |
+| `pciutils` | Designer | official repos |
+
+The remaining packages are ordinary desktop libraries: `glibc`, `glib2`,
+`zlib`, `pango`, `cairo`, `fontconfig`, `freetype2`, `gdk-pixbuf2`,
+`at-spi2-core`, `libglvnd`, `libx11`, `libxcb`, `libxext`, `libxrender`,
+`libxft`, `libxi`, `libxt`, `libxpm`, `libxtst`, `libxss`, `libxrandr`,
+`libxfixes`, `libxdamage`, `libxcomposite`, `libxcursor`, `libxinerama`,
+`libxxf86vm`, `libxau`, `libice`, `libsm`, `libxslt`, `libpulse`, `alsa-lib`,
+`krb5`, `nss`, `nspr`, `sqlite`, `expat`, `bzip2`, `xz`, `util-linux-libs`,
+`systemd-libs`, `graphite`.
+
+Found nowhere, neither in the tree nor on the system:
+
+- `libXm.so.3` (Motif), 2 Designer files. The launcher uses the `_nomotif`
+  setup script, so probably unused **[inferred]**.
+- `libnsl.so.2` and `libcrdreader.so`, one QuestaSim helper
+  (`VisualizerRls/bin/crdapp`).
+- Two `libboost_chrono` builds, required only by the bundled `libboost_wave`.
+
+Not direct requirements of anything in the tree, despite earlier guesses:
+`libpng12`, `openssl-1.0`, `libjpeg6-turbo`, `libusb-compat`, system Qt 5.
+`libpng15` is needed by the installer only. `xorg-xwayland` remains needed at
+run time (fix 4). Fonts and locale were not covered by this method.
+
+The earlier `ldd`-based sweep command, for reference. It reports transitive
+requirements and, without the launcher's `LD_LIBRARY_PATH`, resolves bundled
+libraries to system copies, so it overstates the list (142 packages here):
 
 ```bash
 find /opt/microchip/Libero_SoC_2026.1 -type f -executable -exec sh -c \
@@ -512,11 +570,26 @@ order now: `lo`, `wlan0`, `licmac`, `tailscale0`, `virbr0`, `enp0s13f0u3u4`
 September, so they are probably on a dock **[inferred]** and unsuitable as a
 permanent licence anchor.
 
-Competing explanation for the failed dummy test **[inferred]**: FlexLM may
-ignore virtual interfaces (no `/sys/class/net/<if>/device`) instead of taking
-the first by index. Cheap test while the dock NICs are attached:
-`lmutil lmhostid`. If it prints several hostids, FlexLM enumerates all
-physical NICs and ordering is not the issue.
+Resolved 2026-11-13 **[verified]**: FlexLM enumerates every physical NIC and
+ignores virtual ones. `lmutil lmhostid` with only `wlan0` physical printed one
+host ID; with a USB Ethernet adapter attached it printed two (adapter first,
+then `wlan0`) and "Only use ONE from the list of hostids". `licmac` and
+`virbr0` were never listed. So the dummy-interface test failed because the
+interface was virtual, not because of ordering, and mitigation options 4 and
+the dummy approach in general are ruled out.
+
+The vendor daemons accept a licence whose host ID is any entry of that list:
+with the adapter attached, `actlmgrd`, `saltd` and `snpslmd` each logged
+`HostID of the License Server: "<usb-mac> <wifi-mac>"` against a licence
+node-locked to `<wifi-mac>` and started normally. A second NIC appearing or
+disappearing therefore does not break a Wi-Fi-anchored licence.
+
+Consequences for `libero-license hostid`: list physical NICs only (those with
+`/sys/class/net/<if>/device`), prefer a built-in wired NIC (no scan
+randomisation, so no MAC race), offer Wi-Fi as the fallback with the
+randomisation warning, and mark USB adapters as removable. On the owner's
+machine Wi-Fi is the only permanent NIC, so the start gate and watchdog stay
+necessary there.
 
 Mitigation options, none tested. 1 and 2 are decided for the package (section 1a):
 
@@ -754,10 +827,20 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    desktop-entry and driver actions. Read only; do not commit them.
 4. Locate the stable download URL of the web installer and its published
    checksum, if any (`microchip.com/Libero`, "Download Software").
-5. Run the `ldd` sweep from section 4; build the real `depends=()`.
-6. `strings` the bundled daemons for their FlexNet version; confirm `lmgrd`
-   from `LicenseDaemons/` starts with the owner's licence (copy the licence
-   to a temp dir; do not touch `/opt/microchip/flexlm`).
+5. Done 2026-11-13, see "Dependency list" in section 4. Remaining: confirm
+   on plain Arch which of those packages are in the official repos.
+6. Done 2026-11-13 **[verified]**: `lmgrd` from `LicenseDaemons/` started
+   with a temp copy of the owner's licence (daemon paths rewritten) and all
+   three vendor daemons came up and listed their features, including
+   `ACTEL_BASESOC`. All four files are executable as installed. Versions from
+   the start-up log: `lmgrd` and `actlmgrd` v11.19.6.0, `saltd` v11.19.5.0,
+   `snpslmd` v11.16.4.0 (older than the separately downloaded one). So the
+   separate daemon download is not needed. Observed in the same run: every
+   daemon logs `Can't make directory /usr/tmp/.flexlm` dozens of times per
+   minute, which would flood the journal, so the `/usr/tmp` shim (fix 7) is
+   worth applying for the service; and `lmgrd -z` in a terminal did not stop
+   on repeated Ctrl-C, so check how the unit stops it. Not yet confirmed:
+   that Libero itself checks out a licence from the bundled set.
 7. Read `Designer/bin/libero` (how it builds `LD_LIBRARY_PATH`, what it does
    with `/etc/redhat-release`) and `grep -rIl '/opt/microchip'` over the
    tree to learn what `maintenancetool` relocation implies.
