@@ -412,7 +412,7 @@ Packages a desktop Arch install is unlikely to have already:
 | `libxcrypt-compat` | Designer, Synplify, Identify | official repos |
 | `gtk2` | Synplify, Identify, a few Designer wx libraries | repo on CachyOS; check plain Arch |
 | `ncurses5-compat-libs` | Identify, QuestaSim | repo on CachyOS; check plain Arch |
-| `lib32-glibc` | 32-bit ModelSim binaries, a few QuestaSim files | multilib |
+| `lib32-glibc`, `lib32-gcc-libs`, `lib32-libx11`, `lib32-libxext`, `lib32-libxrender`, `lib32-libxft`, `lib32-fontconfig` | ModelSim, whose programs (`vsim`, `vish`, `vsimk`, compilers) are 32-bit | multilib |
 | `numactl`, `libtirpc` | QuestaSim | official repos |
 | `gperftools` | Synplify, Identify | official repos |
 | `pciutils` | Designer | official repos |
@@ -459,8 +459,11 @@ Synthesis ran clean on 2026-11-13 under the fake `redhat-release` setup
 (Synplify Pro Y-2026.03M, licence `synplifypro_actel` checked out from the
 local server, exit status 0, no library errors) **[verified]**.
 
-Not yet exercised at all: simulation (ModelSim/QuestaSim), SmartHLS, actual
-programming.
+ModelSim (2025.3, 32-bit) starts and its GUI opens when run directly with
+`SALT_LICENSE_SERVER` set, 2026-11-14 **[verified]**. A simulation started
+from Libero has not been confirmed yet.
+
+Not yet exercised at all: QuestaSim, SmartHLS, actual programming.
 
 ## 5. Licensing
 
@@ -508,8 +511,17 @@ sed -E -e 's|^SERVER +[^ ]+ |SERVER localhost |' \
 ```
 LM_LICENSE_FILE=1702@localhost
 SNPSLMD_LICENSE_FILE=1702@localhost
-SALT_LICENSE_FILE=1702@localhost
+SALT_LICENSE_SERVER=1702@localhost
 ```
+
+Corrected 2026-11-14: the simulator variable is `SALT_LICENSE_SERVER`, not
+`SALT_LICENSE_FILE`. The bundled ModelSim (2025.3) ignores the old names;
+its release notes say `MGLS_LICENSE_FILE` and `LM_LICENSE_FILE` are deprecated
+since 2025.1 in favour of `SALT_LICENSE_SERVER` **[doc]**. Without it `vsim
+-gui` exits with status 4 and "license file environment variable
+(SALT_LICENSE_SERVER) is not set correctly"; with it the GUI opens
+**[verified]**. Started from Libero, a failing simulator shows nothing but
+"Starting Simulation..." in the log window.
 
 ### Current user unit on the owner's machine [verified working; the package uses a system unit instead]
 
@@ -556,6 +568,15 @@ Observed **[verified]**:
   then shows a "no valid license" popup although Synplify features list fine.
 - `systemctl --user restart flexlm` while `wlan0` shows its permanent MAC
   fixes it. `Restart=on-failure` does not help, because lmgrd never exits.
+- Trigger identified 2026-11-13 **[verified from the journal]**: wake from
+  sleep. After a 34-minute suspend all three vendor daemons logged "Lost
+  connection to lmgrd, heartbeat timeout expired" and exited; lmgrd restarted
+  them within three seconds; `saltd` and `actlmgrd` read the wrong MAC and
+  exited with status 34; NetworkManager logged `set-hw-addr: reset MAC address
+  ... (preserve)` three seconds after that. So on a Wi-Fi-anchored laptop
+  this is likely on every resume, not a rare race. While in that state
+  `systemctl start` is a no-op (the unit is still active) and both Libero and
+  the simulator fail to check out.
 
 Dummy-interface experiment **[verified failed]**: created
 `licmac` (type dummy, MAC `<licmac-mac>`), obtained a new licence for it.
@@ -612,7 +633,15 @@ Mitigation options, none tested. 1 and 2 are decided for the package (section 1a
 5. Wired NIC or USB Ethernet adapter as the licence anchor, if it enumerates
    before `wlan0`. Subject to the same ordering question as 4.
 
-Decided: 1 and 2 together, 3 documented as opt-in only.
+6. Restart the unit after resume **[untested]**: a unit ordered after
+   `sleep.target` (or a system-sleep hook) that waits for the SERVER hostid to
+   reappear on an interface, as in option 1, and then restarts the licence
+   service. Addresses the trigger found on 2026-11-13 directly; option 1
+   alone does not, because lmgrd is not restarted on resume.
+
+Decided: 1 and 2 together, 3 documented as opt-in only. Option 6 was added
+after the decision and is proposed for the same package; test it in round 3
+of the test plan.
 
 ## 6. Programmer (FlashPro) access
 
@@ -654,7 +683,7 @@ Wrapper currently at `~/.local/bin/libero`:
 export QT_QPA_PLATFORM=xcb
 export LM_LICENSE_FILE=1702@localhost
 export SNPSLMD_LICENSE_FILE=1702@localhost
-export SALT_LICENSE_FILE=1702@localhost
+export SALT_LICENSE_SERVER=1702@localhost
 exec /opt/microchip/Libero_SoC_2026.1/Libero_SoC/Designer/bin/libero "$@"
 ```
 
