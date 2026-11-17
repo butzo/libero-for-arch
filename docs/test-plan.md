@@ -2,7 +2,9 @@
 
 Agreed with the owner on 2026-11-13. Background and confidence tags
 (**[verified]**, **[doc]**, **[inferred]**, **[untested]**) are in
-[handoff.md](handoff.md); section numbers below refer to that file.
+[handoff.md](handoff.md). Section numbers below are the ones shared by
+handoff.md (0, 1, 1a), [findings.md](findings.md) (2 to 7, 11),
+[design.md](design.md) (8, 10) and this file (9, at the end).
 
 ## Target
 
@@ -33,7 +35,7 @@ Hand-fixing on a plain Arch system is not.
   wiped, **after** the licence file is backed up (phase 0, step 1).
 - The owner runs commands that need root. The agent prepares the exact
   commands, reads the logs and records the results.
-- Results go into `handoff.md` with a confidence tag. Raw logs go to
+- Results go into `findings.md` with a confidence tag. Raw logs go to
   `local/logs/` and are redacted before anything is quoted in a tracked file.
 - Commands marked **[untested]** are proposals. Record what actually worked.
 
@@ -153,4 +155,62 @@ Identical after every install:
 ## Done when
 
 Round 4 passes on a wiped machine with no step outside the four in the Target
-section, and `handoff.md` carries the results with **[verified]** tags.
+section, and `findings.md` carries the results with **[verified]** tags.
+
+## 9. Verify first (ordered, one at a time)
+
+Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
+
+1. `<installer> search` : does headless mode work at all, and which component
+   ids does it list? Needs network, installs nothing.
+2. Headless install test into a throwaway root, e.g.
+   `--root /tmp/libero-test` with `--no-default-installations install Libero_SoC`
+   and `-d -d`. Needs about 49 GB free and the download. Record every message
+   box id that appears, the exit code, what lands in `$HOME`, and whether
+   `CommonDir=` on the command line is honoured. Stop and report if the
+   vendor script refuses headless mode; that changes the design.
+3. Read `InstallationLog.txt`, `LiberoConfig.txt` and the vendor
+   `installscript*.js` from the IFW cache (`~/.cache/qt-installer-framework/`)
+   for the post-install steps, the Linux requirements check, and the exact
+   desktop-entry and driver actions. Read only; do not commit them.
+4. Locate the stable download URL of the web installer and its published
+   checksum, if any (`microchip.com/Libero`, "Download Software").
+5. Done 2026-11-13, see "Dependency list" in section 4. Remaining: confirm
+   on plain Arch which of those packages are in the official repos.
+6. Done 2026-11-13 **[verified]**: `lmgrd` from `LicenseDaemons/` started
+   with a temp copy of the owner's licence (daemon paths rewritten) and all
+   three vendor daemons came up and listed their features, including
+   `ACTEL_BASESOC`. All four files are executable as installed. Versions from
+   the start-up log: `lmgrd` and `actlmgrd` v11.19.6.0, `saltd` v11.19.5.0,
+   `snpslmd` v11.16.4.0 (older than the separately downloaded one). So the
+   separate daemon download is not needed. Observed in the same run: every
+   daemon logs `Can't make directory /usr/tmp/.flexlm` dozens of times per
+   minute, which would flood the journal, so the `/usr/tmp` shim (fix 7) is
+   worth applying for the service; and `lmgrd -z` in a terminal did not stop
+   on repeated Ctrl-C, so check how the unit stops it.
+
+   Done 2026-11-16 **[verified]**, bundled daemons run as a transient
+   systemd user unit (`lmgrd -z`): Libero started without a licence popup,
+   and `actlmgrd` logged `OUT: "ACTEL_BASESOC"` one second after the
+   launch. `systemctl stop` sends SIGTERM; lmgrd logged "will now shut down
+   all the vendor daemons", stopped all three and exited within the same
+   second, leaving no process behind. So the default `KillMode` is fine for
+   the package unit. The `/usr/tmp/.flexlm` message appeared 53 times in a
+   36-second run (about 1.5 per second).
+
+   Side finding **[inferred from timing]**: the vendor launcher
+   `Designer/bin/libero` puts `libero_bin` in the background and returns
+   at once (exit 0 in the same second, while the licence stayed checked out
+   for 11 seconds). Anything that wraps it and wants the exit status or the
+   output, such as a scripted smoke test, has to redirect output to a file
+   and wait for `libero_bin`, or call `libero_bin` directly.
+7. Read `Designer/bin/libero` (how it builds `LD_LIBRARY_PATH`, what it does
+   with `/etc/redhat-release`) and `grep -rIl '/opt/microchip'` over the
+   tree to learn what `maintenancetool` relocation implies.
+8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
+9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
+10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
+11. Run the rest of one full flow to surface missing libraries in the tools
+    that have not run yet. Synthesis, P&R, bitstream generation and
+    programming are done, see section 4. Remaining: a simulation started
+    from Libero.

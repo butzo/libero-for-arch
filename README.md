@@ -3,8 +3,11 @@
 Running Microchip Libero SoC on Arch Linux: a helper package for the AUR and
 the notes behind it.
 
-**Status: work in progress.** Nothing here is installable yet. The findings so
-far and the open verification steps are in [docs/handoff.md](docs/handoff.md).
+**Status: work in progress.** Nothing here is installable yet. Start with
+[docs/handoff.md](docs/handoff.md) (rules, goal, decisions); the findings so
+far are in [docs/findings.md](docs/findings.md), the package design in
+[docs/design.md](docs/design.md) and the open verification steps in
+[docs/test-plan.md](docs/test-plan.md).
 
 ## What this will be
 
