@@ -463,7 +463,12 @@ ModelSim (2025.3, 32-bit) starts and its GUI opens when run directly with
 `SALT_LICENSE_SERVER` set, 2026-11-14 **[verified]**. A simulation started
 from Libero has not been confirmed yet.
 
-Not yet exercised at all: QuestaSim, SmartHLS, actual programming.
+Programming a device with the embedded FlashPro5 worked, reported by the
+owner 2026-11-16 **[verified]**. Which shim setup was active (libstdc++
+symlink or fake `redhat-release`) was not recorded; the machine has been on
+the symlink since 2026-11-13, so probably that one **[inferred]**.
+
+Not yet exercised at all: QuestaSim, SmartHLS.
 
 ## 5. Licensing
 
@@ -669,9 +674,9 @@ of the test plan.
   describe unbinding `ftdi_sio` from interface 0 **[doc]**. On this machine
   the programmer worked with the permissions rule alone; whether `ftdi_sio`
   was loaded was never checked. Treat the unbind rule as possibly needed.
-- Open hardware issue, not software: scan chain failed with
-  `TDO stuck at 1`. Likely board power, JTAG-select jumper, or the wrong
-  target board for the embedded programmer. Not resolved in this session.
+- Earlier hardware issue: scan chain failed with `TDO stuck at 1` (board
+  power, JTAG-select jumper or wrong target board suspected). Programming
+  worked on 2026-11-16 **[verified]**, so it was not a software problem.
 - "Remote Programming and Debug Services" were skipped; not needed locally.
 
 ## 7. Desktop integration [verified]
@@ -871,17 +876,33 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    daemon logs `Can't make directory /usr/tmp/.flexlm` dozens of times per
    minute, which would flood the journal, so the `/usr/tmp` shim (fix 7) is
    worth applying for the service; and `lmgrd -z` in a terminal did not stop
-   on repeated Ctrl-C, so check how the unit stops it. Not yet confirmed:
-   that Libero itself checks out a licence from the bundled set.
+   on repeated Ctrl-C, so check how the unit stops it.
+
+   Done 2026-11-16 **[verified]**, bundled daemons run as a transient
+   systemd user unit (`lmgrd -z`): Libero started without a licence popup,
+   and `actlmgrd` logged `OUT: "ACTEL_BASESOC"` one second after the
+   launch. `systemctl stop` sends SIGTERM; lmgrd logged "will now shut down
+   all the vendor daemons", stopped all three and exited within the same
+   second, leaving no process behind. So the default `KillMode` is fine for
+   the package unit. The `/usr/tmp/.flexlm` message appeared 53 times in a
+   36-second run (about 1.5 per second).
+
+   Side finding **[inferred from timing]**: the vendor launcher
+   `Designer/bin/libero` puts `libero_bin` in the background and returns
+   at once (exit 0 in the same second, while the licence stayed checked out
+   for 11 seconds). Anything that wraps it and wants the exit status or the
+   output, such as a scripted smoke test, has to redirect output to a file
+   and wait for `libero_bin`, or call `libero_bin` directly.
 7. Read `Designer/bin/libero` (how it builds `LD_LIBRARY_PATH`, what it does
    with `/etc/redhat-release`) and `grep -rIl '/opt/microchip'` over the
    tree to learn what `maintenancetool` relocation implies.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
-11. Run the rest of one full flow (simulation, programming) to surface
-    missing libraries in the tools that have not run yet. Synthesis, P&R and
-    bitstream generation are done, see section 4.
+11. Run the rest of one full flow to surface missing libraries in the tools
+    that have not run yet. Synthesis, P&R, bitstream generation and
+    programming are done, see section 4. Remaining: a simulation started
+    from Libero.
 
 ## 10. Decisions left to the agent
 
