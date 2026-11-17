@@ -21,7 +21,7 @@ and a distrobox container (second OS userland, weak host integration).
 ### Package contents (target)
 
 ```
-/usr/bin/libero                       wrapper: env vars, exec vendor launcher
+/usr/bin/libero                       wrapper: env vars, pseudo-terminal (section 4), vendor launcher
 /usr/bin/libero-setup                 root tool: install | remove | update | status
 /usr/bin/libero-license               root tool: hostid | install <License.dat> | status
 /usr/lib/systemd/system/libero-flexlm.service

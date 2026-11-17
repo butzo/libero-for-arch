@@ -412,15 +412,69 @@ Synthesis ran clean on 2026-11-13 under the fake `redhat-release` setup
 local server, exit status 0, no library errors) **[verified]**.
 
 ModelSim (2025.3, 32-bit) starts and its GUI opens when run directly with
-`SALT_LICENSE_SERVER` set, 2026-11-14 **[verified]**. A simulation started
-from Libero has not been confirmed yet.
+`SALT_LICENSE_SERVER` set, 2026-11-14 **[verified]**.
+
+Pre-synthesis simulation started from the Libero GUI works, 2026-11-16 and
+2026-11-17 **[verified]**: on a PolarFire SoC project of the owner with a
+VHDL testbench and the CoreUART and CoreAPB3 libraries, Libero generated
+`run.do`, ModelSim Pro 2025.3 compiled everything with 0 errors, loaded the
+design and the PolarFire PLI library, opened its GUI with the waveforms, and
+`run -all` ended with the testbench's own pass message. Confirmed for three
+ways of starting Libero: from a terminal, through the wrapper, and from the
+desktop entry. The last two needed the pseudo-terminal fix below.
+
+### ModelSim needs a terminal on Libero's standard input [verified 2026-11-17]
+
+Symptom: "Simulate" shows "Starting Simulation..." and no window appears.
+The simulation log shows a clean compile and load, then
+`wave ... not supported in batch mode`, `# <EOF>` and an exit with 0 errors.
+
+Cause: `vsim` inherits Libero's standard input and chooses its mode from it
+(the binary calls `isatty`). With a terminal it opens the GUI. Without one
+it runs in batch mode, reads end-of-file and quits. Libero has no terminal
+on standard input when it is started from a desktop entry, or from a wrapper
+that redirects it from `/dev/null`. Started by hand in a terminal it works,
+which hid the problem at first.
+
+Fix: start Libero inside a pseudo-terminal. `script` from util-linux (part
+of the base system) does that:
+
+```sh
+script -qc '<install>/Libero_SoC/Designer/bin/libero' /dev/null
+```
+
+Details that matter for the package wrapper and desktop entry (section 7):
+
+- `script` hands its command to `$SHELL` as one string. Arguments such as a
+  project path have to be shell-quoted, and `SHELL=/bin/sh` should be set for
+  the `script` call so the quoting does not depend on the user's shell.
+- Inside the pseudo-terminal the vendor launcher stays in the foreground
+  until Libero exits (the `script` session lasted exactly as long as Libero),
+  so the pseudo-terminal lives as long as needed without extra waiting code.
+  This differs from the start without a terminal, see the side finding in
+  section 9 item 6.
+- `script` itself runs fine with `/dev/null` on its own standard input, so
+  `setsid -f script ... </dev/null >/dev/null 2>&1` detaches cleanly.
+
+One error remains in the transcript and is cosmetic: `invalid command name ""`
+from the line `TreeUpdate [SetDefaultTree]` of a saved wave file. The
+waveforms are shown regardless. Whether it also appears on a supported
+distribution was not checked.
 
 Programming a device with the embedded FlashPro5 worked, reported by the
-owner 2026-11-16 **[verified]**. Which shim setup was active (libstdc++
-symlink or fake `redhat-release`) was not recorded; the machine has been on
-the symlink since 2026-11-13, so probably that one **[inferred]**.
+owner 2026-11-16 **[verified]**. Which shim setup was active was not
+recorded.
 
-Not yet exercised at all: QuestaSim, SmartHLS.
+Correction, 2026-11-16: the working machine is on the fake
+`/etc/redhat-release` (AlmaLinux 9.6) with the original bundled
+`lib64/rhel/libstdc++.so.6` in place, not on the libstdc++ symlink
+**[verified]**. The statement above that both changes were reverted on
+2026-11-13 no longer describes the machine. The simulation results, and
+probably the programming run **[inferred]**, are therefore results under the
+fake file.
+
+Not yet exercised at all: QuestaSim, SmartHLS, post-synthesis and post-layout
+simulation.
 
 ## 5. Licensing
 
@@ -633,7 +687,8 @@ of the test plan.
 
 ## 7. Desktop integration [verified]
 
-Wrapper currently at `~/.local/bin/libero`:
+Wrapper at `~/.local/bin/libero`, core of it as of 2026-11-17 (the owner's
+copy also turns a directory argument into the one `.prjx` file inside it):
 
 ```sh
 #!/bin/sh
@@ -641,8 +696,20 @@ export QT_QPA_PLATFORM=xcb
 export LM_LICENSE_FILE=1702@localhost
 export SNPSLMD_LICENSE_FILE=1702@localhost
 export SALT_LICENSE_SERVER=1702@localhost
-exec /opt/microchip/Libero_SoC_2026.1/Libero_SoC/Designer/bin/libero "$@"
+# Pseudo-terminal for ModelSim, see section 4.
+quote() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
+cmd="exec env SHELL=$(quote "${SHELL:-/bin/sh}")"
+cmd="$cmd /opt/microchip/Libero_SoC_2026.1/Libero_SoC/Designer/bin/libero"
+for arg in "$@"; do
+	cmd="$cmd $(quote "$arg")"
+done
+SHELL=/bin/sh setsid -f script -qc "$cmd" /dev/null </dev/null >/dev/null 2>&1
 ```
+
+The desktop entry in use on the owner's machine does not go through the
+wrapper; its `Exec=` line sets the same variables with `env` and runs
+`script -qc <launcher> /dev/null`. The entry below is the target for the
+package, where `/usr/bin/libero` carries the pseudo-terminal.
 
 Desktop entry:
 

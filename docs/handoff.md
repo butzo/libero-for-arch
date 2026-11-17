@@ -21,6 +21,21 @@ licence identifiers, serial numbers) are **not** in these files. They live in
 `local/machine-private.md`, which must never be committed. Placeholders such
 as `<wifi-mac>` refer to entries in that file.
 
+## Status (2026-11-17)
+
+- The owner's hand-made install runs the whole flow on CachyOS: synthesis,
+  place and route, bitstream generation, programming, and simulation started
+  from Libero. Details in sections 4 to 7.
+- The licence server is reliable only until the next wake from sleep (the
+  MAC race, section 5). Start gate, watchdog and restart after resume are
+  designed but untested.
+- Nothing of the package exists yet. The headless install of the vendor
+  software has not been tried.
+
+Next: test-plan.md, phase 0 steps 1 and 7 (backup, inventory of files
+outside `/opt`), then phase 1 (uninstall) and round 1 of phase 2 (headless
+install as root).
+
 ## 0. How to read this document
 
 Every claim carries a confidence tag. Do not treat lower tiers as fact.

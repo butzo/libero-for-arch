@@ -198,6 +198,15 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    the package unit. The `/usr/tmp/.flexlm` message appeared 53 times in a
    36-second run (about 1.5 per second).
 
+   Lesson, 2026-11-17 **[verified]**: stop such a temporary unit after the
+   test. The one from this test was left running, kept port 1702, and lost
+   its vendor daemons to the MAC race the same evening (status 34). The next
+   day the regular unit logged "The TCP port number in the license, 1702, is
+   already in use" and only retried, so restarting it gave no licence until
+   the leftover unit was stopped. For the package: two licence servers on
+   one port fail quietly, so `libero-license status` should report a port
+   that is held by a process outside the packaged unit.
+
    Side finding **[inferred from timing]**: the vendor launcher
    `Designer/bin/libero` puts `libero_bin` in the background and returns
    at once (exit 0 in the same second, while the licence stayed checked out
@@ -210,7 +219,7 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
-11. Run the rest of one full flow to surface missing libraries in the tools
-    that have not run yet. Synthesis, P&R, bitstream generation and
-    programming are done, see section 4. Remaining: a simulation started
-    from Libero.
+11. Done 2026-11-17 **[verified]**: one full flow has run on Arch. Synthesis,
+    P&R, bitstream generation, programming and a simulation started from
+    Libero all work, see section 4. No missing library turned up in any of
+    them.
