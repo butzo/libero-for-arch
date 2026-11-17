@@ -265,45 +265,6 @@ and confirm the bundled set works with 2026.1 before building on it.
 - Environment used for the successful run: `IATEMPDIR=$HOME/tmp/ia`,
   `_JAVA_AWT_WM_NONREPARENTING=1`. Neither was shown to be necessary.
 
-### Silent install, InstallAnywhere era [doc, 2023.2 to 2025.x; does NOT apply to 2026.1]
-
-```bash
-<installer> -r /tmp/response_file            # interactive run, records answers
-<installer> -i silent -f /tmp/response_file  # replay
-<installer> -i console                       # text-mode interactive
-```
-
-Documented response-file keys:
-
-```
-USER_INPUT_RESULT_1=1
-USER_INPUT_RESULT_2=0
-USER_INPUT_RESULT_3=0
-USER_INSTALL_DIR=<path>
-USER_COMMON_DIR=<path>
-CHOSEN_FEATURE_LIST=Libero,Synplify,ModelsimPro,Identify,SmartHLS
-CHOSEN_INSTALL_FEATURE_LIST=Libero,Synplify,ModelsimPro,Identify,SmartHLS
-CHOSEN_INSTALL_SET=Custom
-```
-
-Feature names for 2026.1 are unconfirmed. Generate a real response file with
-`-r` instead of trusting this list. An earlier note in the owner's reference
-doc used `ModelSim` and `CHOSEN_INSTALL_SET=Libero`; those were guesses and are
-superseded by the keys above.
-
-### Things to look for in the install root [doc for 2025.1, unchecked for 2026.1]
-
-A BeagleBoard guide shows this layout for 2025.1:
-`Libero_SoC_2025.1/{Libero_SoC, LicenseDaemons, MegaVault, SmartHLS, req_to_install.sh}`.
-
-- `req_to_install.sh`: vendor script listing/installing required distro
-  packages. Best source for the dependency list.
-- `LicenseDaemons/`: if present in 2026.1, the daemons do **not** need a
-  separate download. The owner downloaded them separately and believes they
-  are not bundled; check the directory before deciding.
-- `udev_install` (FlashPro5) and `fp6_env_install` (FlashPro6) scripts
-  **[doc]**; location in the 2026.1 tree unknown.
-
 ## 4. Runtime fixes that were needed on Arch
 
 Each row is a failure that was hit, in order.
