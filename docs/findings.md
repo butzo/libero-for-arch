@@ -324,6 +324,63 @@ components.
 `$TMPDIR`, and refuses several CLI commands (remove, update, list, search
 and others). The `.bin` is the IFW binary itself with the generic CLI.
 
+### Headless install as root works [verified 2026-11-18]
+
+Command, run by the owner as root, with the vendor's `.bin` (IFW CLI), the
+fake `/etc/redhat-release` moved aside, and a target that did not exist yet:
+
+```sh
+sudo env TMPDIR=/var/tmp/libero-ifw <installer>.bin -p minimal -d -d \
+  --root /opt/microchip-test/Libero_SoC_2026.1 \
+  --cache-path /var/tmp/libero-ifw/cache \
+  --set-temp-repository http://ww1.microchip.com/downloads/aemdocuments/documents/fpga-direct/liberosoc/2026.1/90-main/linux \
+  --no-default-installations --accept-licenses --accept-messages --confirm-command \
+  install Libero_SoC CommonDir=/opt/microchip-test/common LINUX_NO_SHORTCUTS=true
+```
+
+- **Result:** exit 0, "Components installed successfully". 7.3 min download
+  (12.5 GB), 5 min unpack, 12 min in total. No prompt appeared.
+- **Mode:** the log shows `IS_ADMIN: true`, `MODE_OPTIONS: system`, and
+  "installing with administrator privileges".
+- **Components:** only `Libero_SoC`, with Synplify Pro, Identify, ModelSim ME
+  Pro and QuestaSim ME inside it. No SmartHLS, MegaVault or RPS. 34 GB
+  installed; the installer's own estimate was 33.76 GB plus 11.69 GB of
+  temporary space, and it checked free space before downloading.
+- **Repository:** `--set-temp-repository` replaced the default repositories,
+  so the 40 s timeout on the vendor-internal host did not occur.
+- **Licence page:** the log says "Headless installation: skip wizard page
+  addition: LicenseWidget"; the same happens to the target and installation
+  pages. The vendor's EULA is therefore never shown in CLI mode. Whether
+  `--accept-licenses` was needed at all is unknown.
+- **Paths:** `--root` and `CommonDir=` were honoured. `install.def` holds
+  eight absolute paths into the target, and `VAULT_LOCATION` points to
+  `<common>/vault`. `ACTCMN_DIR` stays relative.
+- **Tree:** all files root-owned, mode 755 (`chmod -R 755`). Compared file by
+  file with the owner's GUI install of the same build, the trees match except
+  for the installer's bookkeeping files, `install.def` (paths), Python
+  `__pycache__` files created at run time in the owner's tree, and the nine
+  icon, `.desktop` and `.directory` files, which `LINUX_NO_SHORTCUTS=true`
+  suppresses. The tree then contains **no Libero icon** at all.
+- **Outside the tree:** no menu entries anywhere (`/usr/share/applications`,
+  `/usr/local`, `/etc/xdg` unchanged). `fp6_env_install` ran and created
+  `/etc/cyusb.conf` and `/etc/udev/rules.d/88-cyusb.rules`: every USB device of
+  vendor 1514 gets mode 666, with `TAG="cyusb_dev"`. udev's `=` on a list key
+  replaces earlier values **[doc]**, so the rule probably drops the `uaccess`
+  tag set by an earlier rule **[inferred]**.
+- **Requirements check:** "Linux OS flavor not supported", status 44, only
+  logged; plus two harmless `grep: stray \` warnings from the vendor script.
+- **Temporary space:** nothing of the download remained in
+  `/var/tmp/libero-ifw` afterwards, apart from an empty `remoterepo-*`
+  folder. The cache folder given with `--cache-path` is deleted on exit (also
+  seen with `search`), so every install downloads the 12.5 GB again.
+
+`search` as a normal user, with a throwaway home, also worked and listed six
+components: `Libero_SoC`, `SmartHLS`, `Program_Debug`,
+`PFSoC_MSS_Configurator`, `MegaVault`, `RPS`. It wrote nothing into the home
+directory. As a normal user the non-admin warning box was answered "Cancel";
+`search` continued regardless, but an `install` as a normal user might stop
+there **[untested]**.
+
 ### Hard-coded install paths [verified 2026-11-18]
 
 - **Launchers.** `Designer/bin/libero` runs `../bin64/<its own name>` relative

@@ -87,6 +87,23 @@ Consequences of the installer scripts (findings.md section 3, 2026-11-18):
 - `/usr/bin/libero` must call `<install>/Libero_SoC/Designer/bin/libero` by
   its full path; a symlink to it breaks the vendor launcher.
 
+Confirmed by the headless install of 2026-11-18 (findings.md section 3); the
+command recorded there is the basis for `libero-setup install`. Open points
+it raised:
+
+- **EULA.** CLI mode skips the vendor's licence page, so `libero-setup` has to
+  show the agreement (or its location) itself and ask for consent before it
+  passes `--accept-licenses`. Where the EULA text can be found is unchecked.
+- **Icon.** With `LINUX_NO_SHORTCUTS=true` the tree has no Libero icon. Either
+  the package's desktop entry uses a generic icon name, or `libero-setup`
+  obtains the vendor icon another way. Open decision.
+- **Download per install.** The IFW cache is deleted on exit, so updates and
+  reinstalls download 12.5 GB again. Acceptable; `create-offline` remains
+  untested.
+- **Shims after install.** The fake `/etc/redhat-release` had to be moved
+  aside for the install and restored afterwards; the package must order it
+  the same way or use shim option 2.
+
 `libero-license install <file>` (written, covered by
 `tests/libero-license.test.sh`): validate that the file's SERVER hostid
 matches a physical interface on this machine, rewrite the SERVER hostname and

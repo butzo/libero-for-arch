@@ -170,6 +170,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    box id that appears, the exit code, what lands in `$HOME`, and whether
    `CommonDir=` on the command line is honoured. Stop and report if the
    vendor script refuses headless mode; that changes the design.
+   Items 1 and 2 done 2026-11-18: headless install as root works, see
+   "Headless install as root works" in findings.md section 3. Still to check:
+   what landed in root's home.
 3. Read `InstallationLog.txt`, `LiberoConfig.txt` and the vendor
    `installscript*.js` from the IFW cache (`~/.cache/qt-installer-framework/`)
    for the post-install steps, the Linux requirements check, and the exact
