@@ -158,6 +158,10 @@ owner only if a test result makes a section 1a decision impossible.
   parallel installs. The vendor layout (`Libero_SoC_<ver>` plus shared
   `common/`) supports parallel installs; the wrapper would then need a
   version switch.
-- Watchdog interval and start-gate timeout.
+- Watchdog interval and start-gate timeout. Decided 2026-11-17 in
+  `libero-flexlm`: check every minute, restart at most every three minutes,
+  not within 60 s of a (re)start and not while lmgrd waits for its port; the
+  start gate waits without a timeout and lets systemd retry every 30 s on
+  errors.
 - Whether `libero-setup` also offers SmartHLS as an explicit opt-in flag
   (not installed by default under any circumstances).

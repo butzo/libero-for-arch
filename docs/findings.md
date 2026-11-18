@@ -526,7 +526,7 @@ WantedBy=default.target
 `ACTEL_BASESOC` is the Libero feature. `snpslmd` logging "Incompatible vendor
 daemon found ... actlmgrd" is benign.
 
-### The MAC race: unsolved, the main reliability problem
+### The MAC race: the main reliability problem, handled by `libero-flexlm`
 
 Observed **[verified]**:
 
@@ -583,11 +583,12 @@ disappearing therefore does not break a Wi-Fi-anchored licence.
 Consequences for `libero-license hostid`: list physical NICs only (those with
 `/sys/class/net/<if>/device`), prefer a built-in wired NIC (no scan
 randomisation, so no MAC race), offer Wi-Fi as the fallback with the
-randomisation warning, and mark USB adapters as removable. On the owner's
-machine Wi-Fi is the only permanent NIC, so the start gate and watchdog stay
-necessary there.
+randomisation warning, and mark USB adapters and dock NICs as removable. On
+the owner's machine Wi-Fi is the only permanent NIC, so the start gate and
+watchdog stay necessary there.
 
-Mitigation options, none tested. 1 and 2 are decided for the package (section 1a):
+Mitigation options as considered before the package existed. 1, 2 and 6 are
+implemented in `libero-flexlm` and tested, see the next subsection:
 
 1. Start gate: `ExecStartPre` that waits until some interface in
    `/sys/class/net/*/address` equals the SERVER hostid from `License.dat`
@@ -612,8 +613,58 @@ Mitigation options, none tested. 1 and 2 are decided for the package (section 1a
    alone does not, because lmgrd is not restarted on resume.
 
 Decided: 1 and 2 together, 3 documented as opt-in only. Option 6 was added
-after the decision and is proposed for the same package; test it in round 3
-of the test plan.
+after the decision and is part of the package as well.
+
+### The `libero-flexlm` package on the working machine [verified 2026-11-18]
+
+Package 0.1.0-3 (`flexlm/`, `aur/libero-flexlm/`) installed with pacman on
+the owner's machine, against the Libero 2026.1 install that is still owned by
+the owner's user. The old user unit and the separately downloaded daemons in
+`/opt/microchip/flexlm` were removed first; the package uses only the daemons
+in `<install>/LicenseDaemons/`.
+
+- **Install.** `sudo libero-license install <License.dat>` created the
+  system user, rewrote the licence, enabled the units and brought up all three
+  vendor daemons. Libero checked out `ACTEL_BASESOC`, and simulation started
+  from Libero worked. Also passed after removing the package, its state
+  directory and its user, i.e. as a fresh install.
+- **Wrong licence refused.** The `License.zip` kept in `/opt/microchip/flexlm`
+  turned out to hold the licence of the dummy-interface experiment. `install`
+  refused it because no physical interface carries its host ID.
+- **Dock NIC.** The dock's Ethernet adapter appears as a PCI device behind a
+  Thunderbolt bridge whose sysfs attribute `removable` reads `removable`.
+  `hostid` first recommended it as a fixed wired NIC; it now walks up the
+  device path, treats it as removable, and recommends Wi-Fi.
+- **Ownership warning.** `install` warns five times that the daemon
+  directory and binaries are not owned by root. Expected with an install owned
+  by the user; it disappears once `libero-setup` installs Libero as root.
+- **Signals.** The vendor daemons ignore SIGTERM: `pkill -x actlmgrd` left no
+  trace in the journal. After SIGKILL, lmgrd logged `actlmgrd exited with
+  status 0 signal = 17` and restarted it within the same second. lmgrd itself
+  stops cleanly on SIGTERM from systemd. `lmgrd -x lmdown -x lmremove` is
+  accepted and logged at start-up.
+- **The real failure, reproduced.** `wlan0` was given a wrong address and
+  `actlmgrd` was killed. lmgrd restarted it, and it exited with
+  `status 34 (Invalid host)`; lmgrd did not restart it again. After the
+  address was restored, the watchdog logged `vendor daemon not running:
+  actlmgrd; restarting` 58 s after the exit, and all three daemons were up
+  4 s later. Outage about one minute, no manual step.
+- **Resume.** After a short suspend the resume unit restarted the service 2 s
+  after wake.
+- **Port wait after a restart.** When tools had been connected, the restarted
+  lmgrd logged `The TCP port number in the license, 1702, is already in use`
+  and started the vendor daemons only 63 s later. Without earlier client
+  connections there was no wait. Every restart can therefore cost about a
+  minute without a licence; lmgrd's own retry limit is five minutes. The
+  watchdog now acts only once lmgrd listens on the port, so it cannot restart
+  a server that is still waiting.
+- **`/usr/tmp`.** The package's `/usr/tmp -> ../var/tmp` link (fix 7 of
+  section 4) is in place; the `Can't make directory /usr/tmp/.flexlm` flood
+  no longer appears.
+
+Not yet observed: a long sleep in everyday use (the original trigger), and a
+start of the service while NetworkManager scans, which is what the start gate
+is for.
 
 ## 6. Programmer (FlashPro) access
 

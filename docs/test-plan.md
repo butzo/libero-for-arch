@@ -120,7 +120,7 @@ Each round is: wipe (phase 1 procedure), install, smoke test.
 |---|---|---|
 | 1 | Headless install as root, `Libero_SoC` only, with `-d -d` (candidate command in section 3) | message box ids and the answers they need, exit code, duration, installed size, writes to root's home, whether the Linux requirements check aborts on Arch, whether `CommonDir` is honoured, whether `libpng15` is needed without a GUI |
 | 2 | Arch fixes chosen in phase 0, applied to a root-owned tree, Libero run as a normal user | start without errors, IP cores download into `common/vault`, permissions the vault needs |
-| 3 | Licence as a system service with a dedicated user, daemons from the vendor tree, start gate and watchdog | clean start, recovery after `pkill -x actlmgrd`, behaviour during `nmcli device wifi rescan`, time to recover |
+| 3 | Licence as a system service with a dedicated user, daemons from the vendor tree, start gate and watchdog | clean start, recovery after `pkill -x actlmgrd`, behaviour during `nmcli device wifi rescan`, time to recover. Done early on 2026-11-18 against the existing install with the `libero-flexlm` package (findings.md section 5); repeat against the fresh install |
 | 4 | Full journey from the Target section with the draft scripts | every manual step still needed, total time |
 
 To settle in round 1, because the later rounds depend on it:
