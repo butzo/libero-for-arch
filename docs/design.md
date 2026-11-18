@@ -238,7 +238,8 @@ owner only if a test result makes a section 1a decision impossible.
 - Package name: one rolling `libero-soc` versus `libero-soc-<ver>` for
   parallel installs. The vendor layout (`Libero_SoC_<ver>` plus shared
   `common/`) supports parallel installs; the wrapper would then need a
-  version switch.
+  version switch. Decided by the owner 2026-11-18 (handoff.md section 1a):
+  one package, one version at a time for now, side-by-side installs later.
 - Watchdog interval and start-gate timeout. Decided 2026-11-17 in
   `libero-flexlm`: check every minute, restart at most every three minutes,
   not within 60 s of a (re)start and not while lmgrd waits for its port; the

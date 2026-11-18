@@ -95,3 +95,6 @@ These are settled. Do not reopen them; implement them.
 | Privacy | `local/` gitignored; see rules in section 0. |
 | Disk | The user's filesystem is unknown; do not rely on btrfs compression or any filesystem feature. Peak during setup is roughly download (12.5 GB) plus install (36 GB), i.e. about 13 GB above the final size. |
 | Scan-MAC randomisation | Stays enabled by default; disabling it is opt-in documentation only. |
+| Versions (2026-11-18) | One `libero-soc` package. One Libero version at a time for now; side-by-side installs of 2026.1 and newer (headless-capable installers only) are a later extension of `libero-setup` and the wrapper. |
+| `/etc` files (2026-11-18) | The package owns `/etc/redhat-release` and `/etc/pki/tls/certs/ca-bundle.crt`. `/etc/cyusb.conf` stays the vendor's file; `libero-setup remove` cleans it up. The vendor's `88-cyusb.rules` is deleted after every install. |
+| IP vault (2026-11-18) | Per user (`~/.actel/vault`, Libero's own fallback); no shared, group-writable vault. |
