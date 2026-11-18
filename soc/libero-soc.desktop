@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Libero SoC
+GenericName=FPGA Design Suite
+Comment=Microchip Libero SoC design suite
+Icon=/var/lib/libero-soc/libero.xpm
+Exec=libero %f
+Terminal=false
+Categories=Development;Electronics;Engineering;
+Keywords=libero;soc;fpga;polarfire;microchip;microsemi;vhdl;verilog;synthesis;
+StartupWMClass=libero_bin
+StartupNotify=false

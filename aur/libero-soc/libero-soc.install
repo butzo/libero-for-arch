@@ -1,0 +1,19 @@
+post_install() {
+	cat <<'EOF'
+==> libero-soc: next steps
+    1. Download the Linux web installer (.zip) from https://www.microchip.com/Libero
+    2. sudo libero-setup install --installer <the .zip>
+         shows Microchip's licence agreement, then installs Libero SoC
+         into /opt/microchip (about 15 minutes, 12.5 GB download)
+    3. Licence: libero-license hostid, then sudo libero-license install <License.dat>
+    Details: /usr/share/doc/libero-soc/README.md
+EOF
+}
+
+pre_remove() {
+	if [ -s /var/lib/libero-soc/install-dir ]; then
+		echo "==> Libero SoC is still installed in $(cat /var/lib/libero-soc/install-dir)."
+		echo "    Remove it first with: sudo libero-setup remove"
+		echo "    Afterwards only by hand: sudo <that directory>/maintenancetool -p minimal -d --confirm-command purge"
+	fi
+}

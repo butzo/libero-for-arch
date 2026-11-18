@@ -20,17 +20,22 @@ and a distrobox container (second OS userland, weak host integration).
 
 ### Package contents (target)
 
-Two packages since 2026-11-17 (section 1a). `libero-soc`, not written yet:
+Two packages since 2026-11-17 (section 1a). `libero-soc`, in `soc/` and
+`aur/libero-soc/` (written 2026-11-18):
 
 ```
 /usr/bin/libero                       wrapper: env vars, pseudo-terminal (section 4), vendor launcher
-/usr/bin/libero-setup                 root tool: install | remove | update | status
-/usr/lib/tmpfiles.d/libero-soc.conf   /var/cache/libero-soc
-/usr/lib/udev/rules.d/70-microchip-flashpro.rules
-/usr/share/applications/libero-soc.desktop
-/usr/share/licenses/libero-soc/        0BSD text for the recipe; pointer to vendor EULA
-/usr/share/doc/libero-soc/             short README: setup steps, licence request, opt-ins
+/usr/bin/libero-setup                 root tool: install | remove | status
+/usr/lib/tmpfiles.d/libero-soc.conf   /var/lib, /var/cache and /var/log/libero-soc
+/usr/lib/udev/rules.d/70-libero-soc.rules   vendor 1514, uaccess
+/usr/share/applications/libero-soc.desktop  icon from /var/lib/libero-soc/libero.xpm
+/usr/share/doc/libero-soc/README.md
+/etc/redhat-release                   shim, "AlmaLinux release 9.6"
+/etc/pki/tls/certs/ca-bundle.crt      shim, link to /etc/ssl/certs/ca-certificates.crt
 ```
+
+There is no `update` command: a new Libero version is `remove`, then
+`install` with the new installer.
 
 `libero-flexlm`, the licence server, in `flexlm/` and `aur/libero-flexlm/`:
 
@@ -71,8 +76,12 @@ Consequences of the installer scripts (findings.md section 3, 2026-11-18):
 - Admin mode runs `fp6_env_install`, which gives every Microchip USB device
   mode 666 through `/etc/udev/rules.d/88-cyusb.rules` and writes
   `/etc/cyusb.conf`, outside pacman's knowledge. `libero-setup install` must
-  replace that rule with the package's `uaccess` rule afterwards, and decide
-  who owns `/etc/cyusb.conf`. Open decision.
+  replace that rule with the package's `uaccess` rule afterwards. Decided
+  2026-11-18: `/etc/cyusb.conf` stays the vendor's file, not the package's.
+  FlashPro6 users need it; the name is generic enough to clash with other
+  Cypress tools; and the vendor script writes to it on every install anyway.
+  `libero-setup remove` deletes its FlashPro6 line, and the file when nothing
+  else is listed.
 - Temporary space: point `TMPDIR` and `--cache-path` at
   `/var/cache/libero-soc` on disk. A RAM-backed `/tmp` cannot hold the
   12.5 GB download (7.6 GB on the owner's machine).
@@ -94,11 +103,21 @@ command recorded there is the basis for `libero-setup install`. Open points
 it raised:
 
 - **EULA.** CLI mode skips the vendor's licence page, so `libero-setup` has to
-  show the agreement (or its location) itself and ask for consent before it
-  passes `--accept-licenses`. Where the EULA text can be found is unchecked.
-- **Icon.** With `LINUX_NO_SHORTCUTS=true` the tree has no Libero icon. Either
-  the package's desktop entry uses a generic icon name, or `libero-setup`
-  obtains the vendor icon another way. Open decision.
+  show the agreement itself and ask for consent before it passes
+  `--accept-licenses`. Decided 2026-11-18: the agreement is embedded in the
+  web installer as a plain-text Qt resource (a 4-byte big-endian length, then
+  the text). `libero-setup` cuts it out byte-exact (2026.1: 69,981 bytes,
+  "License Rev. No. 10-121225"), shows it in a pager and requires typing
+  `I accept`; `--accept-eula` is the non-interactive equivalent. Text and
+  consent record go to `/var/lib/libero-soc/`. The agreement's own wording
+  asks for an explicit "I accept"; a bare yes/no without the text would not
+  match it **[inferred, not legal advice]**. The agreement forbids
+  unauthorised modification and distribution; the package does neither.
+- **Icon.** With `LINUX_NO_SHORTCUTS=true` the tree has no Libero icon.
+  Decided 2026-11-18: `libero-setup` cuts `libero.xpm` out of the installer
+  the same way (byte-identical to the file the GUI install creates) into
+  `/var/lib/libero-soc/libero.xpm`, where the package's desktop entry points.
+  The package itself ships no vendor artwork.
 - **Download per install.** The IFW cache is deleted on exit, so updates and
   reinstalls download 12.5 GB again. Acceptable; `create-offline` remains
   untested.
@@ -108,10 +127,10 @@ it raised:
 - **IP vault.** With a root-owned common dir, Libero falls back to a per-user
   vault in `~/.actel/vault` without complaint (findings.md section 3). That
   needs no writable system directory, at the cost of one copy of the cores
-  per user. Proposed: keep the common dir root-owned and rely on the
-  fallback; a shared, group-writable vault is an opt-in at most. The
-  `--purge` cleanup of `libero-setup remove` then has to mention
-  `~/.actel/vault`.
+  per user. Decided 2026-11-18: keep the common dir root-owned and rely on
+  the fallback; a shared, group-writable vault is an opt-in at most, not
+  built. `libero-setup remove --purge` lists `~/.actel/vault` among the
+  per-user data it cannot remove.
 - **libstdc++.** Not needed: the pristine tree runs with the fake
   `redhat-release` alone (libstdc++ option "none").
 
@@ -208,7 +227,14 @@ Decide these from test results and record the reasoning in the repo. Ask the
 owner only if a test result makes a section 1a decision impossible.
 
 - Shim strategy: package-owned system files or per-process namespace.
-- libstdc++ strategy 1, 2 or 3, after the `ldd` sweep.
+  Decided 2026-11-18: package-owned files, `/etc/redhat-release` and the
+  link `/etc/pki/tls/certs/ca-bundle.crt`. A per-process namespace needs the
+  bind target to exist on the host, and an unprivileged user cannot create
+  `/etc/redhat-release` there. `libero-setup install` moves the file aside
+  while the vendor installer runs.
+- libstdc++ strategy 1, 2 or 3, after the `ldd` sweep. Decided 2026-11-18:
+  none of them; the fake `redhat-release` makes the vendor launcher leave the
+  bundled libstdc++ off the library path, verified on a pristine tree.
 - Package name: one rolling `libero-soc` versus `libero-soc-<ver>` for
   parallel installs. The vendor layout (`Libero_SoC_<ver>` plus shared
   `common/`) supports parallel installs; the wrapper would then need a

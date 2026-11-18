@@ -1,0 +1,513 @@
+#!/bin/bash
+# libero-setup: install, remove and check Microchip Libero SoC on Arch Linux.
+# Runs Microchip's own web installer headless; this package ships no vendor
+# files. Download the installer yourself from https://www.microchip.com/Libero
+#
+#   libero-setup install [--installer FILE] [--accept-eula]
+#                        FILE: the downloaded .zip or the .bin inside it
+#   libero-setup remove [--purge]
+#   libero-setup status
+set -euo pipefail
+
+ROOT=""
+# Free space the install needs; 0 switches the check off.
+MIN_FREE_GB=50
+# The test suite moves all system paths under a fake root. Outside of it the
+# environment is ignored, so that a root run cannot be pointed elsewhere.
+if [[ -n ${LIBERO_SETUP_TEST:-} ]]; then
+	ROOT=${LIBERO_SETUP_ROOT:-}
+	MIN_FREE_GB=${LIBERO_SETUP_MIN_FREE_GB:-$MIN_FREE_GB}
+fi
+
+OPT_DIR=$ROOT/opt/microchip
+COMMON_DIR=$OPT_DIR/common
+STATE_DIR=$ROOT/var/lib/libero-soc
+CACHE_DIR=$ROOT/var/cache/libero-soc
+LOG_DIR=$ROOT/var/log/libero-soc
+REDHAT_RELEASE=$ROOT/etc/redhat-release
+CA_BUNDLE=$ROOT/etc/pki/tls/certs/ca-bundle.crt
+CYUSB_CONF=$ROOT/etc/cyusb.conf
+VENDOR_UDEV_RULE=$ROOT/etc/udev/rules.d/88-cyusb.rules
+
+DOWNLOAD_URL=https://www.microchip.com/Libero
+COMPONENT=Libero_SoC
+EULA_START='MICROCHIP IS WILLING TO LICENSE THE ACCOMPANYING TECHNOLOGY'
+EULA_PRODUCT='LICENSE AGREEMENT FOR LIBERO SOC DESIGN SUITE'
+ICON_START='/* XPM */'
+ICON_NAME='libero_xpm'
+# The FlashPro6 entry that the vendor's fp6_env_install adds to cyusb.conf.
+FP6_LINE='1514 2009'
+# Resources embedded in the installer are far smaller than this.
+MAX_RESOURCE=1048576
+
+MOVED_REDHAT=""
+TMP_FILES=()
+
+die() {
+	echo "libero-setup: $*" >&2
+	exit 1
+}
+
+warn() { echo "libero-setup: warning: $*" >&2; }
+
+info() { echo "==> $*"; }
+
+on_exit() {
+	restore_redhat_release
+	((${#TMP_FILES[@]} == 0)) || rm -rf -- "${TMP_FILES[@]}"
+}
+trap on_exit EXIT
+
+need_root() {
+	[[ $(id -u) -eq 0 || -n ${LIBERO_SETUP_TEST:-} ]] || die "this command needs root; run it with sudo"
+}
+
+usage() {
+	sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"
+}
+
+# --- resources inside the vendor installer -----------------------------------
+
+# Qt stores each embedded file as a 4-byte big-endian length followed by the
+# bytes. be32_at <file> <offset>: the length in front of the data at offset.
+be32_at() {
+	dd if="$1" bs=4 iflag=skip_bytes,count_bytes skip=$(($2 - 4)) count=4 status=none |
+		od -An -tu1 | awk '{ print $1 * 16777216 + $2 * 65536 + $3 * 256 + $4 }'
+}
+
+# extract_resource <file> <start text> <must contain> <out>: write the first
+# embedded file that starts with <start text> and contains <must contain>.
+extract_resource() {
+	local file=$1 start=$2 needle=$3 out=$4 offset length
+	for offset in $(grep -abo -F -- "$start" "$file" | cut -d: -f1 || true); do
+		((offset >= 4)) || continue
+		length=$(be32_at "$file" "$offset")
+		((length > 0 && length <= MAX_RESOURCE)) || continue
+		dd if="$file" bs=64K iflag=skip_bytes,count_bytes skip="$offset" count="$length" status=none >"$out"
+		if grep -q -F -- "$needle" "$out"; then
+			return 0
+		fi
+	done
+	: >"$out"
+	return 1
+}
+
+# The default repository is named in the installer; using it directly avoids
+# a 40-second timeout on a vendor-internal host.
+repository_url() {
+	{ grep -a -o -m1 -E '<Url>https?://ww1\.microchip\.com/[^<]*</Url>' "$1" || true; } |
+		sed -e 's|^<Url>||' -e 's|</Url>$||'
+}
+
+# --- the installer file --------------------------------------------------------
+
+find_installer() {
+	local given=$1 newest=""
+	if [[ -n $given ]]; then
+		[[ -f $given && -r $given ]] || die "cannot read $given"
+		echo "$given"
+		return
+	fi
+	if [[ -d $CACHE_DIR ]]; then
+		newest=$(find "$CACHE_DIR" -maxdepth 1 -type f \( -iname '*_online_lin.bin' -o -iname '*_online_lin.zip' \) \
+			-printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
+	fi
+	[[ -n $newest ]] || die "no installer found. Download the Linux web installer (a .zip) from
+  $DOWNLOAD_URL
+and run: sudo libero-setup install --installer <the .zip>"
+	echo "$newest"
+}
+
+# prepare_installer <file>: a root-owned copy of the .bin in the cache. The
+# name is checked before anything is copied, and the copy stays private
+# until it is in place, so --installer cannot be used to read other files.
+prepare_installer() {
+	local source=$1 dir=$CACHE_DIR/installer member staging bin
+	case ${source,,} in
+	*_online_lin.zip) ;;
+	*_online_lin.bin) version_of "$source" >/dev/null ;;
+	*) die "$(basename "$source") is not a Libero web installer (expected *_online_lin.zip or Libero_SoC_<version>_online_lin.bin)" ;;
+	esac
+	mkdir -p "$dir"
+	staging=$(mktemp -d "$dir/.staging.XXXXXX")
+	TMP_FILES+=("$staging")
+	case ${source,,} in
+	*.zip)
+		member=$(unzip -Z1 "$source" | awk 'tolower($0) ~ /_online_lin\.bin$/')
+		member=${member%%$'\n'*}
+		[[ -n $member ]] || die "$source contains no *_online_lin.bin"
+		version_of "$member" >/dev/null
+		unzip -o -j -q "$source" "$member" -d "$staging"
+		bin=$staging/$(basename "$member")
+		;;
+	*)
+		install -m 0700 -- "$source" "$staging/$(basename "$source")"
+		bin=$staging/$(basename "$source")
+		;;
+	esac
+	chmod 0755 "$bin"
+	mv -f -- "$bin" "$dir/$(basename "$bin")"
+	echo "$dir/$(basename "$bin")"
+}
+
+version_of() {
+	local name
+	name=$(basename "$1")
+	[[ $name =~ ^Libero_SoC_([0-9][0-9.]*[0-9])_online_lin\.bin$ ]] ||
+		die "cannot tell the Libero version from the name $name (expected Libero_SoC_<version>_online_lin.bin)"
+	echo "${BASH_REMATCH[1]}"
+}
+
+# --- checks -------------------------------------------------------------------
+
+existing_ancestor() {
+	local dir=$1
+	until [[ -d $dir ]]; do dir=$(dirname "$dir"); done
+	echo "$dir"
+}
+
+# Free space in MiB; df -BG would round up.
+free_mb() { df -BM --output=avail "$(existing_ancestor "$1")" | tail -n 1 | tr -dc '0-9'; }
+
+check_space() {
+	((MIN_FREE_GB > 0)) || return 0
+	local opt cache
+	opt=$(free_mb "$OPT_DIR")
+	cache=$(free_mb "$CACHE_DIR")
+	if [[ $(stat -c %d "$(existing_ancestor "$OPT_DIR")") == $(stat -c %d "$(existing_ancestor "$CACHE_DIR")") ]]; then
+		((opt >= MIN_FREE_GB * 1024)) ||
+			die "not enough free space: the install needs about ${MIN_FREE_GB} GB (34 GB installed, 12.5 GB download); free: $((opt / 1024)) GB"
+	else
+		((opt >= 36 * 1024 && cache >= 13 * 1024)) ||
+			die "not enough free space: 36 GB needed for /opt (free: $((opt / 1024)) GB) and 13 GB for /var/cache (free: $((cache / 1024)) GB)"
+	fi
+}
+
+installed_dir() {
+	local dir
+	dir=$(cat "$STATE_DIR/install-dir" 2>/dev/null) || return 1
+	[[ -n $dir ]] || return 1
+	echo "$dir"
+}
+
+# --- licence agreement --------------------------------------------------------
+
+# This runs as root: secure mode stops less from starting a shell or editor.
+show_text() {
+	if command -v less >/dev/null; then
+		LESSSECURE=1 less -- "$1"
+	else
+		cat -- "$1"
+	fi
+}
+
+# consent <installer> <accept flag>: show the agreement and record consent.
+consent() {
+	local bin=$1 accepted=$2 text found answer how
+	mkdir -p "$STATE_DIR"
+	text=$(mktemp "$STATE_DIR/EULA.XXXXXX")
+	TMP_FILES+=("$text")
+	if extract_resource "$bin" "$EULA_START" "$EULA_PRODUCT" "$text"; then
+		found=yes
+	else
+		found=no
+	fi
+
+	if [[ -n $accepted ]]; then
+		how="--accept-eula"
+	else
+		[[ -t 0 ]] || die "the Microchip licence agreement has to be accepted. Run this in a terminal,
+or pass --accept-eula if you have read and accept it."
+		if [[ $found == yes ]]; then
+			echo "Installing Libero SoC requires accepting Microchip's licence agreement."
+			read -r -p "Press Enter to read it; you are asked to accept it afterwards. " _ ||
+				die "aborted; nothing was installed"
+			show_text "$text"
+		else
+			echo "The licence agreement could not be read from this installer."
+			echo "Read it in the graphical installer ($bin) or on $DOWNLOAD_URL"
+		fi
+		read -r -p 'Type "I accept" to accept the agreement, anything else to stop: ' answer ||
+			die "aborted; nothing was installed"
+		[[ $answer == "I accept" ]] || die "agreement not accepted; nothing was installed"
+		how="interactive prompt"
+	fi
+
+	{
+		echo "accepted on: $(date -Iseconds)"
+		echo "accepted by: ${SUDO_USER:-$(id -un)}"
+		echo "how: $how"
+		if [[ $found == yes ]]; then
+			echo "revision: $(grep -m1 -o -E 'License Rev\. No\. [0-9-]+' "$text" || echo unknown)"
+			echo "text: $STATE_DIR/EULA.txt"
+			echo "text sha256: $(sha256sum "$text" | cut -d' ' -f1)"
+		else
+			echo "text: not found in the installer"
+		fi
+		echo "installer: $(basename "$bin") sha256 $(sha256sum "$bin" | cut -d' ' -f1)"
+	} >"$STATE_DIR/eula-accepted"
+	if [[ $found == yes ]]; then
+		chmod 0644 "$text"
+		mv -f -- "$text" "$STATE_DIR/EULA.txt"
+	fi
+}
+
+# --- shims and vendor leftovers ------------------------------------------------
+
+# With /etc/redhat-release present, the vendor's requirements check takes the
+# system for RHEL and runs yum as root. Keep it out of the way while the
+# vendor installer runs.
+move_redhat_release_aside() {
+	[[ -e $REDHAT_RELEASE ]] || return 0
+	MOVED_REDHAT=$REDHAT_RELEASE.libero-setup
+	mv -f -- "$REDHAT_RELEASE" "$MOVED_REDHAT"
+}
+
+restore_redhat_release() {
+	[[ -n $MOVED_REDHAT ]] || return 0
+	[[ ! -e $MOVED_REDHAT ]] || mv -f -- "$MOVED_REDHAT" "$REDHAT_RELEASE"
+	MOVED_REDHAT=""
+}
+
+# A run that was killed outright cannot restore the file; do it next time.
+recover_redhat_release() {
+	local aside=$REDHAT_RELEASE.libero-setup
+	[[ -e $aside ]] || return 0
+	if [[ -e $REDHAT_RELEASE ]]; then
+		rm -f -- "$aside"
+	else
+		mv -f -- "$aside" "$REDHAT_RELEASE"
+		warn "restored $REDHAT_RELEASE, left aside by an aborted run"
+	fi
+}
+
+# The vendor rule makes every Microchip USB device writable by everyone and
+# resets the tag list; the package's own rule grants the seat user access.
+remove_vendor_udev_rule() {
+	[[ -f $VENDOR_UDEV_RULE ]] || return 0
+	if grep -q 'cyusb_dev' "$VENDOR_UDEV_RULE" && grep -q '1514' "$VENDOR_UDEV_RULE"; then
+		rm -f -- "$VENDOR_UDEV_RULE"
+	fi
+}
+
+# Drop the FlashPro6 entry; drop the file when nothing else is listed.
+clean_cyusb_conf() {
+	[[ -f $CYUSB_CONF ]] || return 0
+	local others
+	# Anything besides the vendor's own lines means the file is shared.
+	others=$(grep -v -E '^[[:space:]]*$|^[[:space:]]*</?VPD>[[:space:]]*$|^(LogFile|PIDFile)=' "$CYUSB_CONF" |
+		grep -v -F "$FP6_LINE" || true)
+	if [[ -z $others ]]; then
+		rm -f -- "$CYUSB_CONF"
+	else
+		sed -i "/^[[:space:]]*${FP6_LINE}[[:space:]]/d" "$CYUSB_CONF"
+	fi
+}
+
+# Logs can contain paths and the user name; keep them from other users.
+make_log_dir() {
+	mkdir -p "$LOG_DIR"
+	chmod 0750 "$LOG_DIR"
+}
+
+reload_udev() {
+	command -v udevadm >/dev/null || return 0
+	udevadm control --reload-rules || warn "udevadm control failed"
+	udevadm trigger --subsystem-match=usb --attr-match=idVendor=1514 || true
+}
+
+# --- commands -----------------------------------------------------------------
+
+run_vendor_installer() {
+	local bin=$1 target=$2 log=$3 repo status
+	local -a args
+	repo=$(repository_url "$bin")
+	args=(-p minimal -d --root "$target" --cache-path "$CACHE_DIR/ifw")
+	[[ -z $repo ]] || args+=(--set-temp-repository "$repo")
+	args+=(--no-default-installations --accept-licenses --accept-messages --confirm-command
+		install "$COMPONENT" "CommonDir=$COMMON_DIR" LINUX_NO_SHORTCUTS=true)
+	mkdir -p "$CACHE_DIR/tmp"
+	make_log_dir
+	info "Running the vendor installer: about 15 minutes, 12.5 GB download. Log: $log"
+	set +e
+	TMPDIR=$CACHE_DIR/tmp "$bin" "${args[@]}" 2>&1 | tee "$log" |
+		grep --line-buffered -E 'Downloading archive|Unpacking components|Installing component|installed successfully|[Ee]rror'
+	status=${PIPESTATUS[0]}
+	set -e
+	return "$status"
+}
+
+cmd_install() {
+	local given="" accepted="" source bin version target log status
+	while (($#)); do
+		case $1 in
+		--installer)
+			(($# >= 2)) || die "--installer needs a file"
+			given=$2
+			shift 2
+			;;
+		--accept-eula)
+			accepted=1
+			shift
+			;;
+		*) die "unknown option $1; see libero-setup --help" ;;
+		esac
+	done
+	need_root
+	recover_redhat_release
+	if installed_dir >/dev/null; then
+		die "Libero SoC is already installed in $(installed_dir); run 'libero-setup remove' first"
+	fi
+
+	source=$(find_installer "$given")
+	bin=$(prepare_installer "$source")
+	version=$(version_of "$bin")
+	target=$OPT_DIR/Libero_SoC_$version
+	if [[ -e $target && -n $(ls -A "$target" 2>/dev/null) ]]; then
+		# Never delete it here: it may be an install made by hand.
+		local hint="sudo rm -rf $target"
+		[[ ! -x $target/maintenancetool ]] || hint="sudo $target/maintenancetool -p minimal -d --confirm-command purge"
+		die "$target exists and is not empty; the vendor installer needs an empty target.
+If it is an old or failed install, remove it with:
+  $hint
+then run this again."
+	fi
+	check_space
+
+	consent "$bin" "$accepted"
+
+	log=$LOG_DIR/install-$(date +%Y%m%d-%H%M%S).log
+	move_redhat_release_aside
+	status=0
+	run_vendor_installer "$bin" "$target" "$log" || status=$?
+	restore_redhat_release
+	# Also after a failure: the vendor rule makes the programmers world-writable.
+	remove_vendor_udev_rule
+	reload_udev
+	if ((status != 0)) || ! grep -q 'Components installed successfully' "$log" ||
+		[[ ! -x $target/Libero_SoC/Designer/bin/libero ]]; then
+		die "the vendor installer failed (exit $status). Details: $log"
+	fi
+
+	if extract_resource "$bin" "$ICON_START" "$ICON_NAME" "$STATE_DIR/libero.xpm"; then
+		chmod 0644 "$STATE_DIR/libero.xpm"
+	else
+		rm -f -- "$STATE_DIR/libero.xpm"
+		warn "the Libero icon was not found in the installer; the menu entry has no icon"
+	fi
+	echo "$target" >"$STATE_DIR/install-dir"
+
+	info "Libero SoC $version installed in $target"
+	cat <<EOF
+Next:
+  1. libero-license hostid            host ID for the free Silver licence
+  2. sudo libero-license install <License.dat>
+  3. Start Libero from the menu or with: libero
+EOF
+}
+
+cmd_remove() {
+	local purge="" dir log status=0
+	while (($#)); do
+		case $1 in
+		--purge)
+			purge=1
+			shift
+			;;
+		*) die "unknown option $1; see libero-setup --help" ;;
+		esac
+	done
+	need_root
+	recover_redhat_release
+	dir=$(installed_dir) || die "nothing installed by libero-setup"
+	if [[ ! -e $dir ]]; then
+		warn "$dir no longer exists; cleaning up the rest"
+	else
+		[[ -x $dir/maintenancetool ]] || die "$dir has no maintenancetool, so the vendor uninstaller cannot run.
+Delete the directory with:
+  sudo rm -rf $dir
+then run 'sudo libero-setup remove' again to clean up the rest."
+		make_log_dir
+		log=$LOG_DIR/remove-$(date +%Y%m%d-%H%M%S).log
+		info "Running the vendor uninstaller. Log: $log"
+		"$dir/maintenancetool" -p minimal -d --confirm-command purge >"$log" 2>&1 || status=$?
+		[[ ! -e $dir ]] || die "the vendor uninstaller left $dir behind (exit $status). Details: $log"
+	fi
+
+	rmdir -- "$COMMON_DIR" 2>/dev/null || true
+	rmdir -- "$OPT_DIR" 2>/dev/null || true
+	remove_vendor_udev_rule
+	clean_cyusb_conf
+	reload_udev
+	rm -f -- "$STATE_DIR/install-dir" "$STATE_DIR/libero.xpm"
+	info "Libero SoC removed from $dir"
+
+	if [[ -n $purge ]]; then
+		rm -f -- "$STATE_DIR/EULA.txt" "$STATE_DIR/eula-accepted"
+		rm -rf -- "$CACHE_DIR/installer" "$CACHE_DIR/ifw" "$CACHE_DIR/tmp" "$LOG_DIR"
+		cat <<'EOF'
+Per-user data is left in each user's home directory; remove it by hand:
+  ~/.actel             settings and the per-user IP vault (~/.actel/vault)
+  ~/.config/Actel      tool settings
+  ~/.config/Microsemi  I/O Editor settings
+  ~/.modelsim          ModelSim window settings
+EOF
+	fi
+}
+
+cmd_status() {
+	local dir healthy=0
+	if ! dir=$(installed_dir); then
+		echo "Libero:    not installed (sudo libero-setup install)"
+		return 1
+	fi
+	echo "Libero:    $dir"
+	if [[ ! -x $dir/Libero_SoC/Designer/bin/libero ]]; then
+		echo "launcher:  MISSING ($dir/Libero_SoC/Designer/bin/libero)"
+		healthy=1
+	fi
+	if grep -q 'AlmaLinux release 9' "$REDHAT_RELEASE" 2>/dev/null; then
+		echo "shim:      $REDHAT_RELEASE in place"
+	else
+		echo "shim:      $REDHAT_RELEASE MISSING or changed; reinstall the libero-soc package"
+		healthy=1
+	fi
+	if [[ -e $CA_BUNDLE ]]; then
+		echo "shim:      $CA_BUNDLE in place"
+	else
+		echo "shim:      $CA_BUNDLE MISSING; reinstall the libero-soc package"
+		healthy=1
+	fi
+	if [[ -s $STATE_DIR/libero.xpm ]]; then
+		echo "icon:      $STATE_DIR/libero.xpm"
+	else
+		echo "icon:      none (the menu entry shows a generic icon)"
+	fi
+	if [[ -f $STATE_DIR/eula-accepted ]]; then
+		echo "agreement: $(sed -n 's/^revision: //p' "$STATE_DIR/eula-accepted"), accepted $(sed -n 's/^accepted on: //p' "$STATE_DIR/eula-accepted")"
+	fi
+	if [[ -f $VENDOR_UDEV_RULE ]] && grep -q 'cyusb_dev' "$VENDOR_UDEV_RULE"; then
+		echo "udev:      vendor rule $VENDOR_UDEV_RULE makes Microchip USB devices world-writable; delete it"
+	fi
+	echo "IP cores:  downloaded per user into ~/.actel/vault"
+	echo "licence:   see 'sudo libero-license status'"
+	return "$healthy"
+}
+
+main() {
+	local command=${1:-}
+	[[ $# -eq 0 ]] || shift
+	case $command in
+	install) cmd_install "$@" ;;
+	remove) cmd_remove "$@" ;;
+	status) cmd_status ;;
+	-h | --help | help) usage ;;
+	"")
+		usage >&2
+		exit 1
+		;;
+	*) die "unknown command '$command'; see libero-setup --help" ;;
+	esac
+}
+
+main "$@"

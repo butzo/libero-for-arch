@@ -1,0 +1,4 @@
+# Microchip (formerly Microsemi and Actel) FPGA programmers, for example the
+# embedded FlashPro5 (1514:2008) and the FlashPro6 (1514:2009): give the user
+# at the seat access. Replaces the vendor rule that made them world-writable.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1514", MODE="0660", TAG+="uaccess"

@@ -1,0 +1,57 @@
+#!/bin/sh
+# libero: start Microchip Libero SoC as installed by libero-setup.
+#   libero [project.prjx | project directory] [vendor options...]
+# Output goes to ${XDG_CACHE_HOME:-~/.cache}/libero-soc/libero.log.
+
+state=/var/lib/libero-soc/install-dir
+dir=$(cat "$state" 2>/dev/null)
+if [ -z "$dir" ]; then
+	echo "libero: Libero SoC is not installed; run: sudo libero-setup install" >&2
+	exit 1
+fi
+launcher=$dir/Libero_SoC/Designer/bin/libero
+if [ ! -x "$launcher" ]; then
+	echo "libero: $launcher is missing; see: sudo libero-setup status" >&2
+	exit 1
+fi
+
+# The bundled Qt has no Wayland plugin; run through XWayland.
+export QT_QPA_PLATFORM=xcb
+# The licence server of the libero-flexlm package. Set these before starting
+# Libero to use another server.
+export LM_LICENSE_FILE="${LM_LICENSE_FILE:-1702@localhost}"
+export SNPSLMD_LICENSE_FILE="${SNPSLMD_LICENSE_FILE:-1702@localhost}"
+# ModelSim and QuestaSim 2025.1 and later read only this name.
+export SALT_LICENSE_SERVER="${SALT_LICENSE_SERVER:-1702@localhost}"
+
+# A directory as first argument stands for the one .prjx file inside it.
+if [ -d "${1:-}" ]; then
+	project_dir=$1
+	shift
+	count=$(find "$project_dir" -maxdepth 1 -type f -name '*.prjx' | wc -l)
+	if [ "$count" -ne 1 ]; then
+		echo "libero: expected exactly one .prjx file in $project_dir, found $count" >&2
+		exit 1
+	fi
+	set -- "$(find "$project_dir" -maxdepth 1 -type f -name '*.prjx')" "$@"
+fi
+
+log_dir=${XDG_CACHE_HOME:-$HOME/.cache}/libero-soc
+mkdir -p "$log_dir"
+log=$log_dir/libero.log
+# Appended, so that two Libero windows do not overwrite each other's output.
+echo "=== $(date '+%F %T') libero $*" >>"$log"
+
+# ModelSim inherits Libero's stdin and opens its GUI only when that is a
+# terminal; otherwise "Simulate" runs it in batch mode and it quits at once.
+# script(1) gives Libero a pseudo-terminal of its own. script runs its
+# command through $SHELL as one string, hence the quoting and the fixed
+# /bin/sh; the user's SHELL is restored for Libero itself.
+quote() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
+cmd="exec env SHELL=$(quote "${SHELL:-/bin/sh}") $(quote "$launcher")"
+for arg in "$@"; do
+	cmd="$cmd $(quote "$arg")"
+done
+# setsid -f detaches Libero, so closing the terminal does not end it. The
+# vendor launcher must be called by its path, not through a symlink.
+SHELL=/bin/sh setsid -f script -qfc "$cmd" /dev/null </dev/null >>"$log" 2>&1
