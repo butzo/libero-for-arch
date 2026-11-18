@@ -1,0 +1,34 @@
+[Unit]
+Description=FlexLM licence server for Microchip Libero SoC
+Documentation=file:///usr/share/doc/libero-flexlm/README.md
+ConditionPathExists=/var/lib/libero-flexlm/License.dat
+After=network.target
+# The start gate may wait a long time; never give up on restarts.
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=libero-flexlm
+Group=libero-flexlm
+Environment=HOME=/var/lib/libero-flexlm/home
+# Start gate: wait until a network interface carries the licence host ID.
+# A vendor daemon that starts while the address is randomised exits for good.
+ExecStartPre=/usr/bin/libero-license wait-hostid
+# lmgrd listens on all interfaces and by default lets any host shut it down
+# or revoke checkouts; -x switches those two remote commands off.
+ExecStart=/var/lib/libero-flexlm/daemons/lmgrd -z -x lmdown -x lmremove -c /var/lib/libero-flexlm/License.dat
+TimeoutStartSec=infinity
+# lmgrd exits with 15 after a clean shutdown on SIGTERM.
+SuccessExitStatus=15
+Restart=on-failure
+RestartSec=30
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+# FlexLM keeps lock files in /usr/tmp, a link to /var/tmp; keep them private.
+PrivateTmp=yes
+ReadWritePaths=/var/lib/libero-flexlm/home
+
+[Install]
+WantedBy=multi-user.target

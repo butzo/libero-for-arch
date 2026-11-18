@@ -13,7 +13,7 @@ installscript*.js
 Updates.xml
 
 # makepkg output
-/aur/src/
-/aur/pkg/
+/aur/*/src/
+/aur/*/pkg/
 *.pkg.tar*
 *.log

@@ -25,7 +25,9 @@ need your own licence from Microchip to run it.
 | Path | Content |
 |---|---|
 | `docs/` | Findings, design decisions, verification list |
-| `aur/` | PKGBUILD and install script (planned) |
+| `aur/` | One directory per package with PKGBUILD and install script; `libero-flexlm` exists, `libero-soc` is planned |
+| `flexlm/` | The licence server package's files: `libero-license`, systemd units |
+| `tests/` | Tests for the scripts |
 | `LICENSES/` | Licence texts |
 | `.githooks/` | Pre-commit scan for personal data |
 | `local/` | Private machine-specific notes, gitignored |

@@ -83,7 +83,7 @@ These are settled. Do not reopen them; implement them.
 |---|---|
 | Architecture | Helper package. pacman owns only wrapper, units, rules, setup tool. The vendor web installer is run headlessly by the setup tool into `/opt/microchip`. No repackaging of the vendor tree, no container. |
 | Components | `Libero_SoC` only. **No** SmartHLS, **no** MegaVault. IP cores download on demand into `/opt/microchip/common/vault` (user data, not packaged). |
-| Licence server | Part of the same package. **System** unit, dedicated system user (e.g. `flexlm`), daemons taken from `<install>/LicenseDaemons/`. Start gate plus watchdog timer shipped by default. Licence request itself stays manual. |
+| Licence server | Its own package, `libero-flexlm` (changed 2026-11-17; before that: part of the same package). **System** unit, dedicated system user `libero-flexlm`, daemons taken from `<install>/LicenseDaemons/`. Start gate, watchdog timer and restart after resume shipped by default. Licence request itself stays manual. |
 | Setup runs as | root. `/opt/microchip` root-owned like any package content. |
 | Repo licences | 0BSD for the files submitted to the AUR (PKGBUILD, `.SRCINFO`, `.install`); AGPL-3.0-or-later for scripts; CC BY-SA 4.0 for prose. Use `REUSE.toml` to declare per-path. |
 | Privacy | `local/` gitignored; see rules in section 0. |

@@ -1,0 +1,7 @@
+[Unit]
+Description=Check the vendor daemons of the Libero licence server
+Documentation=file:///usr/share/doc/libero-flexlm/README.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/libero-license watchdog

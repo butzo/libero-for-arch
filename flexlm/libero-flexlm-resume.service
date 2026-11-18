@@ -1,0 +1,14 @@
+[Unit]
+Description=Restart the Libero licence server after resume
+Documentation=file:///usr/share/doc/libero-flexlm/README.md
+# After a sleep the vendor daemons lose their heartbeat, get restarted by
+# lmgrd while the Wi-Fi address may still be randomised, and exit for good.
+# Restarting the unit sends it through the start gate again.
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl --no-block try-restart libero-flexlm.service
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

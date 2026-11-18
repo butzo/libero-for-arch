@@ -16,6 +16,6 @@ SPDX-License-Identifier = "CC-BY-SA-4.0"
 
 # Files submitted to the AUR, plus repository housekeeping.
 [[annotations]]
-path = ["aur/PKGBUILD", "aur/.SRCINFO", "aur/**.install", ".gitignore", "REUSE.toml"]
+path = ["aur/**/PKGBUILD", "aur/**/.SRCINFO", "aur/**/*.install", ".gitignore", "REUSE.toml"]
 SPDX-FileCopyrightText = "libero-for-arch contributors"
 SPDX-License-Identifier = "0BSD"

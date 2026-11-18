@@ -1,0 +1,472 @@
+#!/bin/bash
+# libero-license: install and supervise the FlexLM licence for Microchip
+# Libero SoC. Ships no vendor software: the licence daemons are taken from the
+# Libero installation, the licence file from the user.
+#
+#   libero-license hostid                 host IDs a licence can be requested for
+#   libero-license install <License.dat>  install the licence, start the server
+#   libero-license status                 is the server healthy?
+#
+# Used by the systemd units of this package:
+#   libero-license wait-hostid [seconds]  start gate
+#   libero-license watchdog               restart when a vendor daemon is gone
+set -euo pipefail
+
+STATE_DIR=/var/lib/libero-flexlm
+RUN_DIR=/run/libero-flexlm
+SYSFS_NET=/sys/class/net
+VENDOR_ROOT=/opt/microchip
+# Seconds the watchdog waits before it believes that a daemon is gone.
+RECHECK_DELAY=10
+# Seconds between two restarts by the watchdog, so that a daemon that never
+# comes up does not take the working ones down every minute.
+MIN_RESTART_INTERVAL=180
+# Seconds after a (re)start during which the watchdog leaves the unit alone:
+# lmgrd needs a moment to bring the vendor daemons up.
+STARTUP_GRACE=60
+# Seconds "install" waits for the server to come up before it reports.
+SETTLE=20
+# The test suite redirects these. Outside of it the environment is ignored,
+# so that a root run cannot be pointed elsewhere.
+if [[ -n ${LIBERO_FLEXLM_TEST:-} ]]; then
+	STATE_DIR=${LIBERO_FLEXLM_STATE_DIR:-$STATE_DIR}
+	RUN_DIR=${LIBERO_FLEXLM_RUN_DIR:-$RUN_DIR}
+	SYSFS_NET=${LIBERO_FLEXLM_SYSFS_NET:-$SYSFS_NET}
+	VENDOR_ROOT=${LIBERO_FLEXLM_VENDOR_ROOT:-$VENDOR_ROOT}
+	RECHECK_DELAY=${LIBERO_FLEXLM_RECHECK_DELAY:-$RECHECK_DELAY}
+	SETTLE=${LIBERO_FLEXLM_SETTLE:-$SETTLE}
+fi
+
+LICENSE_FILE=$STATE_DIR/License.dat
+DAEMON_LINK=$STATE_DIR/daemons
+SERVICE=libero-flexlm.service
+SERVICE_USER=libero-flexlm
+UNITS=(libero-flexlm.service libero-flexlm-watchdog.timer libero-flexlm-resume.service)
+REQUEST_URL=https://www.microchipdirect.com/fpga-software-products
+TMP_FILE=""
+
+die() {
+	echo "libero-license: $*" >&2
+	exit 1
+}
+
+cleanup() { [[ -z $TMP_FILE ]] || rm -f -- "$TMP_FILE"; }
+trap cleanup EXIT
+
+need_root() {
+	[[ $(id -u) -eq 0 || -n ${LIBERO_FLEXLM_TEST:-} ]] || die "this command needs root; run it with sudo"
+}
+
+usage() {
+	sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"
+}
+
+# --- licence file -------------------------------------------------------------
+
+# license_field <file> <n>: field n of the first SERVER line.
+license_field() {
+	awk -v n="$2" '{ sub(/\r$/, "") } $1 == "SERVER" { print $n; exit }' "$1"
+}
+
+license_hostid() { license_field "$1" 3 | tr 'A-F' 'a-f'; }
+
+license_port() { license_field "$1" 4; }
+
+# Names of the vendor daemons the licence asks for.
+license_daemons() {
+	awk '{ sub(/\r$/, "") } $1 == "DAEMON" || $1 == "VENDOR" { print $2 }' "$1"
+}
+
+# A host ID can also be ANY, a host name or a disk ID; only an Ethernet
+# address is something an interface has to carry.
+is_mac_hostid() { [[ $1 =~ ^[0-9a-f]{12}$ ]]; }
+
+# check_license <file>: dies unless the file has what the server needs.
+check_license() {
+	local file=$1 hostid port name names
+	hostid=$(license_hostid "$file")
+	port=$(license_port "$file")
+	[[ -n $hostid && $port =~ ^[0-9]+$ ]] ||
+		die "$file has no usable SERVER line (expected: SERVER <name> <host id> <port>)"
+	mapfile -t names < <(license_daemons "$file")
+	((${#names[@]})) || die "$file names no vendor daemons (DAEMON or VENDOR lines)"
+	for name in "${names[@]}"; do
+		[[ $name =~ ^[A-Za-z0-9_]+$ ]] ||
+			die "$file names a vendor daemon '$name'; only letters, digits and _ are accepted"
+	done
+	# A DAEMON line continued with a backslash would be cut apart by the rewrite.
+	if awk '{ sub(/\r$/, "") } ($1 == "DAEMON" || $1 == "VENDOR") && /\\$/ { found = 1 } END { exit !found }' "$file"; then
+		die "$file continues a DAEMON or VENDOR line over several lines; join it into one line and try again"
+	fi
+}
+
+# The licence as the server needs it: host name "localhost", daemon paths
+# through the daemon link, Unix line ends. Everything else stays as signed.
+render_license() {
+	awk -v dir="$DAEMON_LINK" '
+		{ sub(/\r$/, "") }
+		$1 == "SERVER" && !seen_server { $2 = "localhost"; seen_server = 1 }
+		$1 == "DAEMON" || $1 == "VENDOR" {
+			# Field 3 is the daemon path unless it is already an option.
+			first_option = ($3 ~ /=/) ? 3 : 4
+			options = ""
+			for (i = first_option; i <= NF; i++) options = options " " $i
+			$0 = $1 " " $2 " " dir "/" $2 options
+		}
+		{ print }
+	' "$1"
+}
+
+# --- network interfaces -------------------------------------------------------
+
+# FlexLM only looks at physical interfaces; those have a device node in sysfs.
+physical_ifaces() {
+	local dir
+	for dir in "$SYSFS_NET"/*; do
+		[[ -e $dir/device ]] && basename "$dir"
+	done
+	return 0
+}
+
+iface_mac() { tr -d ':\n' <"$SYSFS_NET/$1/address" | tr 'A-F' 'a-f'; }
+
+# ip prints "permaddr" only while the current address differs from it.
+iface_permanent_mac() {
+	local permanent
+	permanent=$(ip -d -o link show dev "$1" 2>/dev/null |
+		sed -n 's/.* permaddr \([0-9A-Fa-f:]*\).*/\1/p')
+	if [[ -n $permanent ]]; then
+		printf %s "$permanent" | tr -d : | tr 'A-F' 'a-f'
+	else
+		iface_mac "$1"
+	fi
+}
+
+iface_kind() {
+	if [[ -d $SYSFS_NET/$1/wireless || -e $SYSFS_NET/$1/phy80211 ]]; then
+		echo wifi
+	elif [[ $(readlink -f "$SYSFS_NET/$1/device") == */usb* ]]; then
+		echo usb
+	else
+		echo wired
+	fi
+}
+
+# iface_with_mac <hostid>: the physical interface that carries it right now.
+iface_with_mac() {
+	local iface
+	for iface in $(physical_ifaces); do
+		if [[ $(iface_mac "$iface") == "$1" ]]; then
+			echo "$iface"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Does the host ID belong to this machine, now or once randomisation ends?
+host_owns_hostid() {
+	local iface
+	for iface in $(physical_ifaces); do
+		[[ $(iface_mac "$iface") == "$1" || $(iface_permanent_mac "$iface") == "$1" ]] && return 0
+	done
+	return 1
+}
+
+# --- server state -------------------------------------------------------------
+
+service_active() { systemctl is-active --quiet "$SERVICE"; }
+
+port_in_use() { [[ -n $(ss -Hltn "sport = :$1" 2>/dev/null) ]]; }
+
+# foreign_listener <port>: "pid name" of a listener outside our unit.
+# Process ids are visible to root only.
+foreign_listener() {
+	local pid
+	for pid in $(ss -Hltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
+		if ! grep -q "$SERVICE" "/proc/$pid/cgroup" 2>/dev/null; then
+			echo "$pid $(cat "/proc/$pid/comm" 2>/dev/null || true)"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Vendor daemons the licence names that are not running.
+missing_daemons() {
+	local name names
+	mapfile -t names < <(license_daemons "$LICENSE_FILE")
+	for name in "${names[@]}"; do
+		# pgrep -x compares with the process name, which the kernel cuts to 15 characters.
+		pgrep -u "$SERVICE_USER" -x "${name:0:15}" >/dev/null 2>&1 || echo "$name"
+	done
+}
+
+# warn_if_replaceable <dir> <daemon...>: the service runs these files, so
+# whoever can change them can run code as the service user.
+warn_if_replaceable() {
+	local dir=$1 path owner mode
+	shift
+	for path in "$dir" "${@/#/$dir/}"; do
+		read -r owner mode < <(stat -L -c '%u %a' -- "$path")
+		if [[ $owner != 0 ]] || ((8#$mode & 8#022)); then
+			echo "libero-license: warning: $path is not owned by root or is writable by group or others;" \
+				"whoever can change it can run code as $SERVICE_USER" >&2
+		fi
+	done
+}
+
+# Start time of the unit in seconds since the epoch, 0 when unknown.
+service_started_at() {
+	local stamp
+	stamp=$(systemctl show --timestamp=unix -p ActiveEnterTimestamp --value "$SERVICE" 2>/dev/null || true)
+	stamp=${stamp#@}
+	if [[ $stamp =~ ^[0-9]+$ ]]; then echo "$stamp"; else echo 0; fi
+}
+
+find_daemon_dir() {
+	local newest
+	newest=$(printf '%s\n' "$VENDOR_ROOT"/Libero_SoC_*/LicenseDaemons | sort -V | tail -n 1)
+	if [[ -x $newest/lmgrd ]]; then
+		echo "$newest"
+	elif [[ -x $VENDOR_ROOT/flexlm/lmgrd ]]; then
+		echo "$VENDOR_ROOT/flexlm"
+	else
+		return 1
+	fi
+}
+
+# --- commands -----------------------------------------------------------------
+
+cmd_hostid() {
+	local iface kind permanent note rank best="" best_rank=9
+	printf '%-16s %-6s %-13s %s\n' INTERFACE TYPE "HOST ID" NOTE
+	for iface in $(physical_ifaces); do
+		# An interface can disappear while we look at it.
+		kind=$(iface_kind "$iface") || continue
+		permanent=$(iface_permanent_mac "$iface") || continue
+		[[ -n $permanent ]] || continue
+		case $kind in
+		wired)
+			rank=1
+			note="fixed address, best choice"
+			;;
+		wifi)
+			rank=2
+			note="works; the address is randomised while scanning, which the watchdog covers"
+			;;
+		*)
+			rank=3
+			note="removable: the licence stops working when it is unplugged"
+			;;
+		esac
+		[[ $(iface_mac "$iface") == "$permanent" ]] || note="$note (randomised right now)"
+		printf '%-16s %-6s %-13s %s\n' "$iface" "$kind" "$permanent" "$note"
+		if ((rank < best_rank)); then
+			best_rank=$rank
+			best=$permanent
+		fi
+	done
+	[[ -n $best ]] || die "no physical network interface found; FlexLM ignores virtual ones"
+	cat <<EOF
+
+Request the "Libero Silver 1Yr Floating License for Windows/Linux Server" for
+host ID $best at
+  $REQUEST_URL
+then run: sudo libero-license install <License.dat>
+EOF
+}
+
+cmd_install() {
+	local source="" daemons="" force="" hostid port name names holder
+	while (($#)); do
+		case $1 in
+		--daemons)
+			(($# >= 2)) || die "--daemons needs a directory"
+			daemons=$2
+			shift 2
+			;;
+		--force)
+			force=1
+			shift
+			;;
+		-*) die "unknown option $1" ;;
+		*)
+			[[ -z $source ]] || die "only one licence file can be given"
+			source=$1
+			shift
+			;;
+		esac
+	done
+	[[ -n $source ]] || die "usage: libero-license install [--daemons DIR] [--force] <License.dat>"
+	need_root
+	[[ -f $source && -r $source ]] || die "cannot read $source"
+	[[ -d $STATE_DIR ]] || die "$STATE_DIR is missing; is the libero-flexlm package installed?"
+
+	check_license "$source"
+	hostid=$(license_hostid "$source")
+	port=$(license_port "$source")
+	if is_mac_hostid "$hostid" && [[ -z $force ]] && ! host_owns_hostid "$hostid"; then
+		die "the licence is for host ID $hostid, which no physical network interface of this machine has.
+Compare with 'libero-license hostid'. Use --force to install it anyway."
+	fi
+
+	if [[ -z $daemons ]]; then
+		daemons=$(find_daemon_dir) ||
+			die "no licence daemons found under $VENDOR_ROOT; install Libero first or pass --daemons DIR"
+	fi
+	daemons=$(readlink -f "$daemons")
+	mapfile -t names < <(license_daemons "$source")
+	for name in lmgrd "${names[@]}"; do
+		[[ -x $daemons/$name ]] || die "$daemons/$name is missing or not executable"
+	done
+	warn_if_replaceable "$daemons" lmgrd "${names[@]}"
+
+	# Two licence servers on one port fail quietly: the second one only retries.
+	if port_in_use "$port"; then
+		if holder=$(foreign_listener "$port"); then
+			die "port $port is in use by another process ($holder). Stop that licence server first,
+for example an older user unit: systemctl --user disable --now flexlm"
+		elif ! service_active; then
+			die "port $port is in use by another process. Stop that licence server first,
+for example an older user unit: systemctl --user disable --now flexlm"
+		fi
+	fi
+
+	TMP_FILE=$(mktemp "$STATE_DIR/License.dat.XXXXXX")
+	render_license "$source" >"$TMP_FILE"
+	chmod 0640 "$TMP_FILE"
+	[[ $(id -u) -ne 0 ]] || chown "root:$SERVICE_USER" "$TMP_FILE"
+	mv -f -- "$TMP_FILE" "$LICENSE_FILE"
+	TMP_FILE=""
+	ln -sfn -- "$daemons" "$DAEMON_LINK"
+
+	systemctl enable "${UNITS[@]}"
+	systemctl start libero-flexlm-watchdog.timer
+	# Not blocking: the start gate may have to wait for the host ID.
+	systemctl --no-block restart "$SERVICE"
+
+	echo "Licence installed, daemons from $daemons."
+	local waited=0
+	while ((waited < SETTLE)) && ! cmd_status >/dev/null 2>&1; do
+		sleep 2
+		waited=$((waited + 2))
+	done
+	cmd_status || true
+	echo
+	echo "Clients reach the server as $port@localhost."
+}
+
+cmd_status() {
+	local healthy=0 hostid port iface state missing holder
+	if [[ ! -e $LICENSE_FILE ]]; then
+		echo "licence:  not installed (sudo libero-license install <License.dat>)"
+		return 1
+	fi
+	state=$(systemctl is-active "$SERVICE" 2>/dev/null || true)
+	if [[ ! -r $LICENSE_FILE ]]; then
+		echo "service:  ${state:-unknown}"
+		echo "Run with sudo for the full status."
+		[[ $state == active ]]
+		return
+	fi
+	hostid=$(license_hostid "$LICENSE_FILE")
+	port=$(license_port "$LICENSE_FILE")
+	echo "licence:  $LICENSE_FILE, port $port"
+	echo "daemons:  $(readlink -f "$DAEMON_LINK" 2>/dev/null || echo "link $DAEMON_LINK is missing")"
+	if is_mac_hostid "$hostid"; then
+		if iface=$(iface_with_mac "$hostid"); then
+			echo "host ID:  present on $iface"
+		else
+			echo "host ID:  NOT on any interface right now (address randomised or adapter unplugged)"
+			healthy=1
+		fi
+	fi
+	echo "service:  ${state:-unknown}"
+	[[ $state == active ]] || healthy=1
+	missing=$(missing_daemons)
+	if [[ -z $missing ]]; then
+		echo "vendor:   all running ($(license_daemons "$LICENSE_FILE" | xargs))"
+	else
+		echo "vendor:   NOT running: $(xargs <<<"$missing")"
+		healthy=1
+	fi
+	if holder=$(foreign_listener "$port"); then
+		echo "port:     $port is held by a process outside $SERVICE ($holder); stop it"
+		healthy=1
+	elif [[ $state != active ]] && port_in_use "$port"; then
+		echo "port:     $port is held by another process; stop it"
+		healthy=1
+	fi
+	return "$healthy"
+}
+
+# Start gate: a vendor daemon that starts while the licensed address is
+# randomised exits for good. Wait until an interface carries it.
+cmd_wait_hostid() {
+	local timeout=${1:-0} hostid waited=0 announced=""
+	[[ $timeout =~ ^[0-9]+$ ]] || die "wait-hostid takes a number of seconds"
+	hostid=$(license_hostid "$LICENSE_FILE")
+	is_mac_hostid "$hostid" || return 0
+	until iface_with_mac "$hostid" >/dev/null; do
+		if [[ -z $announced ]]; then
+			echo "waiting for a network interface that carries the licence host ID"
+			announced=1
+		fi
+		((timeout == 0 || waited < timeout)) || die "the licence host ID did not appear within ${timeout}s"
+		sleep 1
+		waited=$((waited + 1))
+	done
+}
+
+# lmgrd keeps running when a vendor daemon has exited with "invalid host",
+# so systemd sees nothing wrong. Restart the unit in that case.
+cmd_watchdog() {
+	local missing started now last
+	[[ -r $LICENSE_FILE ]] || return 0
+	# Stopped, failed, or still held by the start gate: nothing to repair.
+	service_active || return 0
+	[[ -n $(missing_daemons) ]] || return 0
+	started=$(service_started_at)
+	now=$(date +%s)
+	# Just (re)started: lmgrd is still bringing the daemons up.
+	((now - started >= STARTUP_GRACE)) || return 0
+	# lmgrd restarts some daemons by itself; give it the chance.
+	sleep "$RECHECK_DELAY"
+	service_active || return 0
+	# Restarted meanwhile (after resume, or by install): leave it alone.
+	[[ $(service_started_at) == "$started" ]] || return 0
+	missing=$(missing_daemons)
+	[[ -n $missing ]] || return 0
+	last=$(cat "$RUN_DIR/last-restart" 2>/dev/null || echo 0)
+	[[ $last =~ ^[0-9]+$ ]] || last=0
+	now=$(date +%s)
+	if ((now - last < MIN_RESTART_INTERVAL)); then
+		echo "vendor daemon not running: $(xargs <<<"$missing"); last restart $((now - last))s ago, waiting"
+		return 0
+	fi
+	mkdir -p "$RUN_DIR"
+	echo "$now" >"$RUN_DIR/last-restart"
+	echo "vendor daemon not running: $(xargs <<<"$missing"); restarting $SERVICE"
+	systemctl --no-block restart "$SERVICE"
+}
+
+main() {
+	local command=${1:-}
+	[[ $# -eq 0 ]] || shift
+	case $command in
+	hostid) cmd_hostid ;;
+	install) cmd_install "$@" ;;
+	status) cmd_status ;;
+	wait-hostid) cmd_wait_hostid "$@" ;;
+	watchdog) cmd_watchdog ;;
+	-h | --help | help) usage ;;
+	"")
+		usage >&2
+		exit 1
+		;;
+	*) die "unknown command '$command'; see libero-license --help" ;;
+	esac
+}
+
+main "$@"

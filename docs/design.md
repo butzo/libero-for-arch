@@ -20,24 +20,37 @@ and a distrobox container (second OS userland, weak host integration).
 
 ### Package contents (target)
 
+Two packages since 2026-11-17 (section 1a). `libero-soc`, not written yet:
+
 ```
 /usr/bin/libero                       wrapper: env vars, pseudo-terminal (section 4), vendor launcher
 /usr/bin/libero-setup                 root tool: install | remove | update | status
-/usr/bin/libero-license               root tool: hostid | install <License.dat> | status
-/usr/lib/systemd/system/libero-flexlm.service
-/usr/lib/systemd/system/libero-flexlm-watchdog.{service,timer}
-/usr/lib/sysusers.d/libero-flexlm.conf   system user `flexlm`
-/usr/lib/tmpfiles.d/libero-flexlm.conf   /var/lib/libero-flexlm (licence), /var/cache/libero-soc
+/usr/lib/tmpfiles.d/libero-soc.conf   /var/cache/libero-soc
 /usr/lib/udev/rules.d/70-microchip-flashpro.rules
 /usr/share/applications/libero-soc.desktop
 /usr/share/licenses/libero-soc/        0BSD text for the recipe; pointer to vendor EULA
 /usr/share/doc/libero-soc/             short README: setup steps, licence request, opt-ins
 ```
 
+`libero-flexlm`, the licence server, in `flexlm/` and `aur/libero-flexlm/`:
+
+```
+/usr/bin/libero-license               hostid | install <License.dat> | status (+ wait-hostid, watchdog for the units)
+/usr/lib/systemd/system/libero-flexlm.service            lmgrd behind the start gate
+/usr/lib/systemd/system/libero-flexlm-watchdog.{service,timer}   every minute
+/usr/lib/systemd/system/libero-flexlm-resume.service     restart after resume
+/usr/lib/sysusers.d/libero-flexlm.conf   system user `libero-flexlm`
+/usr/lib/tmpfiles.d/libero-flexlm.conf   /var/lib/libero-flexlm
+/usr/tmp -> ../var/tmp                   FlexLM lock files (fix 7 of section 4)
+/usr/share/doc/libero-flexlm/README.md
+```
+
 Vendor tree at `/opt/microchip/Libero_SoC_<ver>`, common dir at
 `/opt/microchip/common`, both created by `libero-setup`, root-owned. The
 licence file lives at `/var/lib/libero-flexlm/License.dat` (readable by the
-`flexlm` user), never inside the vendor tree.
+`libero-flexlm` user), never inside the vendor tree. The daemons stay in the
+vendor tree and are reached through the link `/var/lib/libero-flexlm/daemons`,
+so a Libero update needs one link changed and no licence edit.
 
 `libero-setup install` **[untested]**: download the web installer to
 `/var/cache/libero-soc` (verify checksum when the vendor publishes one;
@@ -47,10 +60,11 @@ require explicit agreement, run the headless install from section 3 with
 `libero-setup remove` calls `maintenancetool purge` and cleans up.
 `libero-setup status` reports installed version, free space, licence state.
 
-`libero-license install <file>` **[untested]**: validate that the file's
-SERVER hostid matches an interface on this machine, rewrite the SERVER
-hostname and the three daemon paths to `<install>/LicenseDaemons/`, copy to
-`/var/lib/libero-flexlm/License.dat`, enable and start the unit.
+`libero-license install <file>` (written, covered by
+`tests/libero-license.test.sh`): validate that the file's SERVER hostid
+matches a physical interface on this machine, rewrite the SERVER hostname and
+the daemon paths (through the daemons link), copy to
+`/var/lib/libero-flexlm/License.dat`, enable and start the units.
 `libero-license hostid` prints the candidate MACs with a warning about
 randomised Wi-Fi MACs and virtual interfaces.
 
@@ -88,10 +102,11 @@ libstdc++ strategy options:
 
 ### Package split
 
-One package, `libero-soc` (name subject to the AUR clash check). The licence
-service is part of it because the daemons come from the vendor tree and a
-Linux user always needs the server. A split into a separate daemon package is
-only worth it if someone wants the server on another machine; not planned.
+Two packages (owner's decision, 2026-11-17): `libero-soc` for the software
+itself and `libero-flexlm` for the licence server. Names are subject to the
+AUR clash check. A Linux user always needs a licence server, so `libero-soc`
+should name `libero-flexlm` as a dependency or optional dependency; someone
+with a server on another machine can then leave it out.
 
 ### Legal and AUR notes [inferred, not legal advice]
 

@@ -1,0 +1,38 @@
+# Maintainer: libero-for-arch contributors
+
+pkgname=libero-flexlm
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="FlexLM licence server setup for Microchip Libero SoC (units, watchdog, licence installer; no vendor binaries)"
+arch=(any)
+url="https://github.com/butzo/libero-for-arch"
+license=(AGPL-3.0-or-later)
+depends=(bash coreutils gawk grep iproute2 procps-ng sed systemd)
+checkdepends=(shellcheck)
+install=libero-flexlm.install
+
+# Development build: the files are taken from this repository checkout.
+# For the AUR this becomes a release tarball in source=().
+_src() { printf %s "$startdir/../../flexlm"; }
+
+check() {
+	shellcheck "$(_src)/libero-license"
+	bash "$startdir/../../tests/libero-license.test.sh"
+}
+
+package() {
+	local src
+	src=$(_src)
+	install -Dm755 "$src/libero-license" "$pkgdir/usr/bin/libero-license"
+	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" \
+		"$src/libero-flexlm.service" \
+		"$src/libero-flexlm-watchdog.service" \
+		"$src/libero-flexlm-watchdog.timer" \
+		"$src/libero-flexlm-resume.service"
+	install -Dm644 "$src/sysusers.conf" "$pkgdir/usr/lib/sysusers.d/libero-flexlm.conf"
+	install -Dm644 "$src/tmpfiles.conf" "$pkgdir/usr/lib/tmpfiles.d/libero-flexlm.conf"
+	install -Dm644 "$src/README.md" "$pkgdir/usr/share/doc/libero-flexlm/README.md"
+	# FlexLM keeps its lock files in /usr/tmp and logs an error more than once
+	# per second when that path does not exist.
+	ln -s ../var/tmp "$pkgdir/usr/tmp"
+}

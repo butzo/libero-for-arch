@@ -1,0 +1,26 @@
+post_install() {
+	cat <<'EOF'
+==> libero-flexlm: next steps
+    1. libero-license hostid
+         shows the host ID to request the Libero licence for, and where
+    2. sudo libero-license install License.dat
+         installs the licence and starts the server
+    Details: /usr/share/doc/libero-flexlm/README.md
+EOF
+}
+
+post_upgrade() {
+	# Pick up changed units; the running server is left alone.
+	systemctl daemon-reload 2>/dev/null || true
+}
+
+pre_remove() {
+	systemctl disable --now \
+		libero-flexlm.service \
+		libero-flexlm-watchdog.timer \
+		libero-flexlm-resume.service 2>/dev/null || true
+}
+
+post_remove() {
+	echo "==> The licence stays in /var/lib/libero-flexlm; remove it by hand if it is no longer needed."
+}
