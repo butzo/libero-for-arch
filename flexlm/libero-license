@@ -143,13 +143,26 @@ iface_permanent_mac() {
 }
 
 iface_kind() {
+	local dir
 	if [[ -d $SYSFS_NET/$1/wireless || -e $SYSFS_NET/$1/phy80211 ]]; then
 		echo wifi
-	elif [[ $(readlink -f "$SYSFS_NET/$1/device") == */usb* ]]; then
-		echo usb
-	else
-		echo wired
+		return
 	fi
+	dir=$(readlink -f "$SYSFS_NET/$1/device")
+	if [[ $dir == */usb* ]]; then
+		echo removable
+		return
+	fi
+	# A NIC in a Thunderbolt dock looks like a PCI device; the kernel marks a
+	# bridge above it as removable.
+	while [[ -n $dir && $dir != / && $dir != /sys/devices ]]; do
+		if [[ $(cat "$dir/removable" 2>/dev/null) == removable ]]; then
+			echo removable
+			return
+		fi
+		dir=${dir%/*}
+	done
+	echo wired
 }
 
 # iface_with_mac <hostid>: the physical interface that carries it right now.
@@ -240,7 +253,7 @@ find_daemon_dir() {
 
 cmd_hostid() {
 	local iface kind permanent note rank best="" best_rank=9
-	printf '%-16s %-6s %-13s %s\n' INTERFACE TYPE "HOST ID" NOTE
+	printf '%-16s %-9s %-13s %s\n' INTERFACE TYPE "HOST ID" NOTE
 	for iface in $(physical_ifaces); do
 		# An interface can disappear while we look at it.
 		kind=$(iface_kind "$iface") || continue
@@ -257,11 +270,11 @@ cmd_hostid() {
 			;;
 		*)
 			rank=3
-			note="removable: the licence stops working when it is unplugged"
+			note="USB adapter or dock: the licence stops working when it is unplugged"
 			;;
 		esac
 		[[ $(iface_mac "$iface") == "$permanent" ]] || note="$note (randomised right now)"
-		printf '%-16s %-6s %-13s %s\n' "$iface" "$kind" "$permanent" "$note"
+		printf '%-16s %-9s %-13s %s\n' "$iface" "$kind" "$permanent" "$note"
 		if ((rank < best_rank)); then
 			best_rank=$rank
 			best=$permanent

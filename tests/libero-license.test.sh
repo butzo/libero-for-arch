@@ -94,6 +94,12 @@ add_iface() {
 		;;
 	wired) ln -s "$W/devices/pci0" "$SYS/$1/device" ;;
 	usb) ln -s "$W/devices/usb1" "$SYS/$1/device" ;;
+	dock)
+		# PCI device behind a bridge the kernel marks removable (Thunderbolt).
+		mkdir -p "$W/devices/pci0/tbt0/nic"
+		echo removable >"$W/devices/pci0/tbt0/removable"
+		ln -s "$W/devices/pci0/tbt0/nic" "$SYS/$1/device"
+		;;
 	virtual) ;;
 	esac
 }
@@ -318,10 +324,18 @@ add_iface virbr0 "$MAC_ABSENT" virtual
 out=$(run hostid 2>&1)
 expect "hostid lists the wired interface" grep -q "enp1s0 .*wired .*$(hostid_of "$MAC_WIRED")" <<<"$out"
 expect "hostid shows the permanent Wi-Fi address" grep -q "wlan0 .*wifi .*$(hostid_of "$MAC_WIFI")" <<<"$out"
-expect "hostid marks USB adapters" grep -q "enp0u1 .*usb .*removable" <<<"$out"
+expect "hostid marks USB adapters as removable" grep -q "enp0u1 .*removable .*unplugged" <<<"$out"
 refuse "hostid hides virtual interfaces" grep -q virbr0 <<<"$out"
 expect "hostid recommends the built-in wired interface" \
 	grep -q "host ID $(hostid_of "$MAC_WIRED")" <<<"$out"
+
+fresh hostid-dock
+add_iface wlan0 "$MAC_WIFI" wifi
+add_iface enp4s0 "$MAC_WIRED" dock
+out=$(run hostid 2>&1)
+expect "hostid marks a dock NIC as removable" grep -q "enp4s0 .*removable .*unplugged" <<<"$out"
+expect "hostid prefers built-in Wi-Fi over a dock NIC" \
+	grep -q "host ID $(hostid_of "$MAC_WIFI")" <<<"$out"
 
 fresh hostid-none
 add_iface virbr0 "$MAC_ABSENT" virtual

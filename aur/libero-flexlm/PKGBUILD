@@ -2,7 +2,7 @@
 
 pkgname=libero-flexlm
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="FlexLM licence server setup for Microchip Libero SoC (units, watchdog, licence installer; no vendor binaries)"
 arch=(any)
 url="https://github.com/butzo/libero-for-arch"
