@@ -384,6 +384,10 @@ cmd_status() {
 	fi
 	echo "service:  ${state:-unknown}"
 	[[ $state == active ]] || healthy=1
+	if [[ $state == active ]] && ! port_in_use "$port"; then
+		echo "lmgrd:    waiting for port $port; after a restart this takes about a minute, at most five"
+		healthy=1
+	fi
 	missing=$(missing_daemons)
 	if [[ -z $missing ]]; then
 		echo "vendor:   all running ($(license_daemons "$LICENSE_FILE" | xargs))"
@@ -431,6 +435,9 @@ cmd_watchdog() {
 	now=$(date +%s)
 	# Just (re)started: lmgrd is still bringing the daemons up.
 	((now - started >= STARTUP_GRACE)) || return 0
+	# After a restart lmgrd waits up to five minutes until the old socket of
+	# the licence port is released, and starts the vendor daemons only then.
+	port_in_use "$(license_port "$LICENSE_FILE")" || return 0
 	# lmgrd restarts some daemons by itself; give it the chance.
 	sleep "$RECHECK_DELAY"
 	service_active || return 0

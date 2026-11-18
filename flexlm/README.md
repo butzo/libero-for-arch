@@ -66,6 +66,11 @@ vendor daemon that never comes up does not take the working ones down every
 minute. A restart ends the licence checkouts of running tools; they fetch
 them again by themselves.
 
+Every restart, including the one after resume, leaves the tools without a
+licence for about a minute: `lmgrd` waits until the kernel releases the old
+socket of the licence port, and starts the vendor daemons only then.
+`libero-license status` shows this as "waiting for port".
+
 ## Security notes
 
 - `lmgrd` and the vendor daemons listen on all network interfaces, as FlexLM

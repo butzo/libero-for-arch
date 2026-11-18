@@ -274,6 +274,7 @@ expect "gate does not wait for a host ID that is not an address" run wait-hostid
 fresh watchdog
 make_license "$(hostid_of "$MAC_WIFI")" | tr -d '\r' >"$STATE/License.dat"
 printf 'actlmgrd\nsaltd\n' >"$W/running"
+: >"$W/port_busy"
 expect "watchdog runs" run watchdog
 refuse "watchdog leaves a stopped service alone" grep -q restart "$W/calls"
 : >"$W/active"
@@ -289,6 +290,9 @@ fresh watchdog-guards
 make_license "$(hostid_of "$MAC_WIFI")" | tr -d '\r' >"$STATE/License.dat"
 : >"$W/active"
 printf 'actlmgrd\nsaltd\n' >"$W/running"
+run watchdog >/dev/null 2>&1
+refuse "watchdog leaves lmgrd alone while it still waits for its port" grep -q restart "$W/calls"
+: >"$W/port_busy"
 : >"$W/young"
 run watchdog >/dev/null 2>&1
 refuse "watchdog leaves a unit alone that has just started" grep -q restart "$W/calls"
@@ -331,6 +335,9 @@ add_iface wlan0 "$MAC_WIFI" wifi
 make_license "$(hostid_of "$MAC_WIFI")" | tr -d '\r' >"$STATE/License.dat"
 : >"$W/active"
 printf 'actlmgrd\nsaltd\nsnpslmd\n' >"$W/running"
+out=$(run status 2>&1)
+expect "status reports lmgrd waiting for its port" grep -q 'waiting for port 1702' <<<"$out"
+: >"$W/port_busy"
 expect "status succeeds when service, daemons and host ID are fine" run status
 printf 'saltd\nsnpslmd\n' >"$W/running"
 refuse "status fails when a vendor daemon is missing" run status
