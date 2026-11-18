@@ -12,15 +12,20 @@ Arch `ncurses5-compat-libs`), and the 32-bit libraries for ModelSim need the
 `multilib` repository. Install with an AUR helper such as `yay` or `paru`;
 `makepkg -s` alone cannot resolve AUR dependencies.
 
-1. Download the Linux web installer from <https://www.microchip.com/Libero>
-   (a `.zip`, about 200 MB).
-2. Install Libero SoC:
+1. Install Libero SoC:
 
    ```sh
-   sudo libero-setup install --installer ~/Downloads/libero_soc_<version>_online_lin.zip
+   sudo libero-setup install
    ```
 
-   This shows Microchip's licence agreement, taken from the installer, and
+   Microchip serves its installer (a `.zip`, about 200 MB) only to a
+   signed-in account, so `libero-setup` cannot fetch it alone: it opens the
+   download link in your browser and waits until the file is in your download
+   folder. Sign in if asked and save the file there. The tool checks the
+   file's SHA-256 before it uses it. A file you already have can be passed
+   with `--installer FILE`.
+2. The same command then
+   shows Microchip's licence agreement, taken from the installer, and
    asks you to type `I accept`. It then installs the component `Libero_SoC`
    (Libero with Synplify Pro, Identify, ModelSim and QuestaSim) into
    `/opt/microchip/Libero_SoC_<version>`. Expect about 15 minutes, a

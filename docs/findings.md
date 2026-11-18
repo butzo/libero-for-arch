@@ -252,9 +252,21 @@ and confirm the bundled set works with 2026.1 before building on it.
 - A separate offline "Full Installer" with published md5/sha256 exists for
   2025.1 and 2025.2 on `microchip.com/Libero` **[doc]**. Whether 2026.1 has one
   is unchecked. If it does, it is the better PKGBUILD source.
-- The installer download needs no login; only licence generation is
-  account-gated **[verified by the owner]**. Whether the URL is stable or
-  session-signed is unknown.
+- Correction, 2026-11-18: the installer download **does** need a Microchip
+  login **[verified]**. The address is
+  `https://ww1.microchip.com/downloads/secure/aemdocuments/documents/fpga/media-content/fpga/2026.1/90-main/libero_soc_2026.1_online_lin.zip`
+  (from the owner's browser). Without a session it answers 302 to
+  `login.microchip.com`, with or without browser-like headers, as does the
+  licence daemon tarball in the same `secure/` area. The earlier "no login"
+  observation was made in a signed-in browser. The address carries the build
+  number (`90-main`) and no session token. The file is 213,072,237 bytes; its
+  SHA-256 begins `e646ffb9` and is pinned in `libero-setup`. Microchip's
+  download page itself answers 403 to scripted requests. The component
+  repository the installer then uses needs no login.
+- Consequence: `libero-setup` cannot fetch the installer by itself. It opens
+  the link in the user's browser, waits for the file in the user's download
+  folder and verifies the checksum before using it (owner's decision,
+  2026-11-18).
 - Without root the installer warns: "You do not have administrator privileges.
   The required drivers and Remote Programming and Debug Services cannot be
   installed." Continuing works **[verified]**.

@@ -1,11 +1,12 @@
 post_install() {
 	cat <<'EOF'
 ==> libero-soc: next steps
-    1. Download the Linux web installer (.zip) from https://www.microchip.com/Libero
-    2. sudo libero-setup install --installer <the .zip>
-         shows Microchip's licence agreement, then installs Libero SoC
-         into /opt/microchip (about 15 minutes, 12.5 GB download)
-    3. Licence: libero-license hostid, then sudo libero-license install <License.dat>
+    1. sudo libero-setup install
+         opens Microchip's installer download in your browser (it needs a
+         Microchip sign-in), waits for it, shows the licence agreement,
+         then installs Libero SoC into /opt/microchip
+         (about 15 minutes, 12.5 GB download)
+    2. Licence: libero-license hostid, then sudo libero-license install <License.dat>
     Details: /usr/share/doc/libero-soc/README.md
 EOF
 }

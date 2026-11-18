@@ -1,10 +1,13 @@
 #!/bin/bash
 # libero-setup: install, remove and check Microchip Libero SoC on Arch Linux.
 # Runs Microchip's own web installer headless; this package ships no vendor
-# files. Download the installer yourself from https://www.microchip.com/Libero
+# files. Microchip serves the installer only to a signed-in account, so your
+# browser downloads it and libero-setup takes it from there.
 #
 #   libero-setup install [--installer FILE] [--accept-eula]
-#                        FILE: the downloaded .zip or the .bin inside it
+#                        Without FILE: opens the installer download in your
+#                        browser and waits for it in your download folder.
+#                        FILE: a downloaded .zip, or the .bin inside it
 #   libero-setup remove [--purge]
 #   libero-setup status
 set -euo pipefail
@@ -14,9 +17,21 @@ ROOT=""
 MIN_FREE_GB=50
 # The test suite moves all system paths under a fake root. Outside of it the
 # environment is ignored, so that a root run cannot be pointed elsewhere.
+# The installer this version of the package knows. Microchip serves it only
+# to a signed-in account, so the user's browser has to fetch it; the checksum
+# makes sure that what is then run as root is this file.
+KNOWN_ZIP=libero_soc_2026.1_online_lin.zip
+KNOWN_URL=https://ww1.microchip.com/downloads/secure/aemdocuments/documents/fpga/media-content/fpga/2026.1/90-main/libero_soc_2026.1_online_lin.zip
+KNOWN_SHA256=e646ffb9350bab5e2b9b011ee9dcf9a755f0643bf39c3fa4a305dfe1e0b3860e
+# Seconds to wait for the browser download.
+WAIT_SECONDS=3600
+DOWNLOAD_DIR=""
 if [[ -n ${LIBERO_SETUP_TEST:-} ]]; then
 	ROOT=${LIBERO_SETUP_ROOT:-}
 	MIN_FREE_GB=${LIBERO_SETUP_MIN_FREE_GB:-$MIN_FREE_GB}
+	KNOWN_SHA256=${LIBERO_SETUP_KNOWN_SHA256:-$KNOWN_SHA256}
+	WAIT_SECONDS=${LIBERO_SETUP_WAIT:-$WAIT_SECONDS}
+	DOWNLOAD_DIR=${LIBERO_SETUP_DOWNLOAD_DIR:-}
 fi
 
 OPT_DIR=$ROOT/opt/microchip
@@ -101,8 +116,62 @@ repository_url() {
 
 # --- the installer file --------------------------------------------------------
 
+sha256_of() { sha256sum -- "$1" | cut -d' ' -f1; }
+
+# The download folder of the user who called sudo.
+user_download_dir() {
+	local user=${SUDO_USER:-} home dir
+	if [[ -n $DOWNLOAD_DIR ]]; then
+		echo "$DOWNLOAD_DIR"
+		return
+	fi
+	[[ -n $user && $user != root ]] || return 1
+	home=$(getent passwd "$user" | cut -d: -f6)
+	[[ -n $home ]] || return 1
+	dir=$(runuser -u "$user" -- xdg-user-dir DOWNLOAD 2>/dev/null || true)
+	[[ -n $dir && -d $dir ]] || dir=$home/Downloads
+	echo "$dir"
+}
+
+# Best effort: the link is printed as well, in case no browser opens.
+open_in_browser() {
+	local url=$1 user=${SUDO_USER:-} uid display
+	if [[ -n ${LIBERO_SETUP_TEST:-} ]]; then
+		xdg-open "$url" >/dev/null 2>&1 || true
+		return 0
+	fi
+	[[ -n $user && $user != root ]] || return 0
+	uid=$(id -u "$user")
+	display=$(find "/run/user/$uid" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' -printf '%f\n' 2>/dev/null | head -n 1)
+	runuser -u "$user" -- env \
+		XDG_RUNTIME_DIR="/run/user/$uid" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+		${display:+WAYLAND_DISPLAY="$display"} \
+		xdg-open "$url" >/dev/null 2>&1 || true
+}
+
+# wait_for_download <dir>: print the zip's path once it is complete. A file
+# counts as complete when it stopped growing and has the known checksum.
+wait_for_download() {
+	local file=$1/$KNOWN_ZIP waited=0 size last=-1
+	while ((waited < WAIT_SECONDS)); do
+		if [[ -f $file ]]; then
+			size=$(stat -c %s -- "$file")
+			if ((size > 0 && size == last)) && [[ $(sha256_of "$file") == "$KNOWN_SHA256" ]]; then
+				echo "$file"
+				return 0
+			fi
+			last=$size
+		fi
+		sleep 2
+		waited=$((waited + 2))
+	done
+	return 1
+}
+
+# Prints the installer to use. Messages go to stderr: stdout is the result.
 find_installer() {
-	local given=$1 newest=""
+	local given=$1 newest="" dir file
 	if [[ -n $given ]]; then
 		[[ -f $given && -r $given ]] || die "cannot read $given"
 		echo "$given"
@@ -112,10 +181,31 @@ find_installer() {
 		newest=$(find "$CACHE_DIR" -maxdepth 1 -type f \( -iname '*_online_lin.bin' -o -iname '*_online_lin.zip' \) \
 			-printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
 	fi
-	[[ -n $newest ]] || die "no installer found. Download the Linux web installer (a .zip) from
-  $DOWNLOAD_URL
-and run: sudo libero-setup install --installer <the .zip>"
-	echo "$newest"
+	if [[ -n $newest ]]; then
+		echo "$newest"
+		return
+	fi
+	dir=$(user_download_dir) || die "cannot tell whose browser to use. Run this with sudo from your own user,
+or download $KNOWN_URL
+yourself and pass it with --installer."
+	if [[ -f $dir/$KNOWN_ZIP && $(sha256_of "$dir/$KNOWN_ZIP") == "$KNOWN_SHA256" ]]; then
+		info "Using $dir/$KNOWN_ZIP" >&2
+		echo "$dir/$KNOWN_ZIP"
+		return
+	fi
+	cat >&2 <<EOF
+==> Microchip serves the installer only to a signed-in account, so your
+    browser has to download it. Opening this link now:
+      $KNOWN_URL
+    Sign in if asked and save the file to $dir.
+    Waiting for $KNOWN_ZIP (Ctrl-C to stop) ...
+EOF
+	open_in_browser "$KNOWN_URL"
+	file=$(wait_for_download "$dir") || die "no complete $KNOWN_ZIP with the expected checksum appeared in $dir.
+Download $KNOWN_URL
+and run this again, or pass the file with --installer. More: $DOWNLOAD_URL"
+	info "Download complete and verified." >&2
+	echo "$file"
 }
 
 # prepare_installer <file>: a root-owned copy of the .bin in the cache. The
@@ -133,6 +223,19 @@ prepare_installer() {
 	TMP_FILES+=("$staging")
 	case ${source,,} in
 	*.zip)
+		# Work on a private copy, so that what was verified is what is unpacked.
+		install -m 0600 -- "$source" "$staging/installer.zip"
+		if [[ $(basename "${source,,}") == "$KNOWN_ZIP" ]]; then
+			local sum
+			sum=$(sha256_of "$staging/installer.zip")
+			[[ $sum == "$KNOWN_SHA256" ]] || die "checksum mismatch for $source
+  expected $KNOWN_SHA256
+  found    $sum
+The file is incomplete, or not the installer this package was made for."
+		else
+			warn "no checksum is known for $(basename "$source"); it cannot be verified"
+		fi
+		source=$staging/installer.zip
 		member=$(unzip -Z1 "$source" | awk 'tolower($0) ~ /_online_lin\.bin$/')
 		member=${member%%$'\n'*}
 		[[ -n $member ]] || die "$source contains no *_online_lin.bin"

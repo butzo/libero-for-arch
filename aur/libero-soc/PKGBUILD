@@ -2,7 +2,7 @@
 
 pkgname=libero-soc
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)"
 arch=(x86_64)
 url="https://github.com/butzo/libero-for-arch"
@@ -10,6 +10,7 @@ license=(AGPL-3.0-or-later)
 depends=(
 	# Licence server and setup tool
 	libero-flexlm bash coreutils findutils gawk grep sed util-linux unzip less systemd ca-certificates
+	xdg-utils xdg-user-dirs
 	# The vendor web installer
 	libpng15
 	# Libero, Synplify, Identify, ModelSim and QuestaSim (findings.md section 4)

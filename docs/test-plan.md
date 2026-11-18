@@ -185,6 +185,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    metadata and the installer binary).
 4. Locate the stable download URL of the web installer and its published
    checksum, if any (`microchip.com/Libero`, "Download Software").
+   Done 2026-11-18: the address is known but needs a Microchip login, see
+   "Earlier notes" in findings.md section 3. No published checksum was
+   found; `libero-setup` pins the SHA-256 of the owner's download.
 5. Done 2026-11-13, see "Dependency list" in section 4. Remaining: confirm
    on plain Arch which of those packages are in the official repos.
 6. Done 2026-11-13 **[verified]**: `lmgrd` from `LicenseDaemons/` started

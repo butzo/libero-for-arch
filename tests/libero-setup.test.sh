@@ -121,15 +121,33 @@ STUB
 fresh() {
 	W=$T/$1
 	FAKEROOT=$W/root
-	mkdir -p "$FAKEROOT/etc" "$W/bin" "$W/home" "$W/downloads"
+	mkdir -p "$FAKEROOT/etc" "$W/bin" "$W/user" "$W/downloads"
 	: >"$W/installer-calls"
 	: >"$W/calls"
 	cat >"$W/bin/udevadm" <<EOF
 #!/bin/sh
 echo "udevadm \$*" >>"$W/calls"
 EOF
-	chmod +x "$W/bin/udevadm"
+	# The browser: asked to open a link, it "downloads" what the test staged.
+	cat >"$W/bin/xdg-open" <<EOF
+#!/bin/sh
+echo "xdg-open \$*" >>"$W/calls"
+[ -e "$W/browser-delivers" ] && cp "$W/browser-delivers" "$W/user/Downloads/$ZIP_NAME"
+exit 0
+EOF
+	chmod +x "$W/bin/udevadm" "$W/bin/xdg-open"
+	mkdir -p "$W/user/Downloads"
 	echo 'AlmaLinux release 9.6 (Sage Margay)' >"$FAKEROOT/etc/redhat-release"
+	KNOWN_SHA=none
+}
+
+ZIP_NAME=libero_soc_2026.1_online_lin.zip
+# make_zip <path>: the installer packed as Microchip delivers it.
+make_zip() {
+	make_installer "$W/Libero_SoC_2026.1_online_lin.bin"
+	(cd "$W" && zip -q -j packed.zip Libero_SoC_2026.1_online_lin.bin && rm Libero_SoC_2026.1_online_lin.bin)
+	mv "$W/packed.zip" "$1"
+	KNOWN_SHA=$(sha256sum "$1" | cut -d' ' -f1)
 }
 
 run() {
@@ -137,6 +155,9 @@ run() {
 		LIBERO_SETUP_TEST=1 \
 		LIBERO_SETUP_ROOT="$FAKEROOT" \
 		LIBERO_SETUP_MIN_FREE_GB=0 \
+		LIBERO_SETUP_DOWNLOAD_DIR="$W/user/Downloads" \
+		LIBERO_SETUP_KNOWN_SHA256="${KNOWN_SHA:-none}" \
+		LIBERO_SETUP_WAIT=4 \
 		SUDO_USER=tester \
 		"$TOOL" "$@" </dev/null
 }
@@ -179,11 +200,39 @@ refuse "a second install refuses an existing target" \
 	run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
 
 fresh install-from-zip
-make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
-(cd "$W/downloads" && zip -q libero_soc_2026.1_online_lin.zip Libero_SoC_2026.1_online_lin.bin && rm Libero_SoC_2026.1_online_lin.bin)
+make_zip "$W/downloads/$ZIP_NAME"
 expect "install takes the zip as downloaded" \
-	run install --accept-eula --installer "$W/downloads/libero_soc_2026.1_online_lin.zip"
+	run install --accept-eula --installer "$W/downloads/$ZIP_NAME"
 expect "and installs from the installer inside it" test -x "$FAKEROOT/$TARGET_REL/Libero_SoC/Designer/bin/libero"
+
+fresh install-zip-tampered
+make_zip "$W/downloads/$ZIP_NAME"
+KNOWN_SHA=0000000000000000000000000000000000000000000000000000000000000000
+out=$(run install --accept-eula --installer "$W/downloads/$ZIP_NAME" 2>&1)
+refuse "a zip with the known name but another checksum is refused" \
+	run install --accept-eula --installer "$W/downloads/$ZIP_NAME"
+expect "and the message says checksum" grep -q -i 'checksum' <<<"$out"
+expect "and the vendor installer never ran" test ! -s "$W/installer-calls"
+
+fresh install-already-downloaded
+make_zip "$W/user/Downloads/$ZIP_NAME"
+expect "install without arguments uses the zip in the user's download folder" run install --accept-eula
+refuse "and does not open the browser for it" grep -q xdg-open "$W/calls"
+expect "and installs" test -x "$FAKEROOT/$TARGET_REL/Libero_SoC/Designer/bin/libero"
+
+fresh install-browser-handoff
+make_zip "$W/browser-delivers"
+out=$(run install --accept-eula 2>&1)
+expect "install without arguments opens the download link in the browser" \
+	grep -q 'xdg-open https://ww1.microchip.com/.*online_lin.zip' "$W/calls"
+expect "prints the link too" grep -q 'https://ww1.microchip.com/.*online_lin.zip' <<<"$out"
+expect "and installs once the download has arrived" test -x "$FAKEROOT/$TARGET_REL/Libero_SoC/Designer/bin/libero"
+
+fresh install-wrong-download
+make_zip "$W/user/Downloads/$ZIP_NAME"
+KNOWN_SHA=0000000000000000000000000000000000000000000000000000000000000000
+refuse "a download with the wrong checksum is never accepted" run install --accept-eula
+expect "and the vendor installer never ran" test ! -s "$W/installer-calls"
 
 fresh install-from-cache
 mkdir -p "$FAKEROOT/var/cache/libero-soc"
