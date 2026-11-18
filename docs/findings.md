@@ -403,7 +403,23 @@ pointed at the test tree.
   `~/.actel/vault` and downloaded the cores the project needed there (436
   files, 249 MB). The vault in the common dir stayed empty.
 - **Also written:** `~/.config/Actel/Default.conf` (window geometry).
-- **Programmer:** not yet checked against this tree.
+- **Programmer:** not checked against this tree; no board was at hand.
+
+### Headless uninstall as root [verified 2026-11-18]
+
+```sh
+sudo <target>/maintenancetool -p minimal -d --confirm-command purge
+```
+
+Exit 0 after 4.7 s, "Removal completed successfully". The log shows
+`INSTALLED_AS_ADMIN: 'true'` and "installed as admin and running uninstaller
+as admin", then the install operations undone in reverse. Undoing the
+extraction removed the whole target tree, the maintenance tool included, so
+the vendor's GUI-only `rm -rf` is not needed. Left behind: the empty common
+dir and its parent directory. The undo step of `fp6_env_install` is an empty
+`echo`, so `/etc/cyusb.conf` and `/etc/udev/rules.d/88-cyusb.rules` would
+also stay (they had been removed by hand before this test). Per-user data
+(`~/.actel/vault`, settings) is not touched.
 
 ### Hard-coded install paths [verified 2026-11-18]
 

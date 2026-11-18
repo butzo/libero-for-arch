@@ -31,14 +31,16 @@ as `<wifi-mac>` refer to entries in that file.
   reproduced MAC-race failure by itself within about a minute (section 5).
   The old user unit and the separately downloaded daemons are gone.
 - The main package, `libero-soc`, does not exist yet. The headless install of
-  the vendor software as root works (findings.md section 3); a test install
-  sits in `/opt/microchip-test`.
+  the vendor software as root works (findings.md section 3); the test
+  install made for that has been removed again with the vendor uninstaller.
 
-Next, using the test install in `/opt/microchip-test`: the programmer scan
-from it (the rest of round 2 passed, findings.md section 3), and the vendor
-uninstaller on it (`maintenancetool purge`).
-Then write `libero-setup` and the `libero-soc` package, then phase 1 on the
-real install. Phase 0 and checklist items 1 to 3, 5 to 7, 9 and 10 are done.
+Headless install, run from a root-owned tree, and headless uninstall are all
+verified on a test install (findings.md section 3). Deferred: a programmer
+scan from a root-owned tree (no board at hand).
+
+Next: write `libero-setup` and the `libero-soc` package (design.md section
+8), then phase 1 on the real install. Phase 0 and checklist items 1 to 3, 5
+to 7, 9 and 10 are done.
 
 ## 0. How to read this document
 

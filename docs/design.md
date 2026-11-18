@@ -81,9 +81,11 @@ Consequences of the installer scripts (findings.md section 3, 2026-11-18):
   or keep them inside the wrapper's namespace (shim option 2).
 - In CLI mode the installer rejects every prompt, so the target directory
   must be empty or absent.
-- Uninstall: `maintenancetool purge` as root. The vendor's removal of the
-  target directory is GUI-only, so `libero-setup remove` deletes the tree
-  itself, plus the `fp6_env_install` files.
+- Uninstall: `maintenancetool purge` as root. Verified 2026-11-18 on the
+  test install: it removes the whole target tree in seconds and leaves the
+  empty common dir behind. `libero-setup remove` then removes the common dir
+  if empty, plus the `fp6_env_install` files, which the purge leaves in
+  `/etc`.
 - `/usr/bin/libero` must call `<install>/Libero_SoC/Designer/bin/libero` by
   its full path; a symlink to it breaks the vendor launcher.
 

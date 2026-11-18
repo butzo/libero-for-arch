@@ -95,10 +95,13 @@ has to do, and is cheaper now than after a wipe.
 ## Phase 1: uninstall
 
 1. Stop and disable the user licence service.
-2. Run the vendor uninstaller headlessly **[untested]**:
+2. Run the vendor uninstaller headlessly. Verified on the root test install
+   on 2026-11-18 (findings.md section 3). The working install was made as the
+   owner's user, so run it as that user, without sudo: the vendor scripts
+   special-case a different user, and CLI mode rejects their prompts.
 
    ```sh
-   /opt/microchip/Libero_SoC_2026.1/maintenancetool --confirm-command -d purge
+   /opt/microchip/Libero_SoC_2026.1/maintenancetool -p minimal --confirm-command -d purge
    ```
 
    Record: exit code, prompts, duration, what remains under `/opt/microchip`
