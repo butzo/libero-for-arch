@@ -265,6 +265,87 @@ and confirm the bundled set works with 2026.1 before building on it.
 - Environment used for the successful run: `IATEMPDIR=$HOME/tmp/ia`,
   `_JAVA_AWT_WM_NONREPARENTING=1`. Neither was shown to be necessary.
 
+### What the installer scripts do [verified 2026-11-18]
+
+Sources, read only and not committed: `InstallationLog.txt`; the component
+metadata archive from the public repository (its SHA-1 matched
+`Updates.xml`); the controller script inside `maintenancetool.dat`; and the
+helper script compiled into the web installer `.bin`.
+
+Work beyond unpacking, per component:
+
+- Creates the common dir and writes `LiberoConfig.txt` there with mode 666.
+  Appends the release to `Designer/adm/verinfo` and sets about nine values in
+  `Designer/data/install.def` (see "Hard-coded install paths" below).
+- Copies `lmgrd`, `actlmgrd`, `snpslmd` and `saltd` from `Designer/bin64`
+  into `LicenseDaemons/`.
+- Writes icons, `.desktop` and `.directory` files into the tree, then
+  registers them with `xdg-desktop-menu` and `xdg-desktop-icon` (the source
+  of the menu files and home-directory copies listed under "Files outside
+  `/opt`").
+- Runs `chmod -R 755` over the target directory, and runs the Linux
+  requirements check.
+- Only when it has admin rights: runs `Designer/bin/fp6_env_install`
+  (section 6), and offers the RPS component, which installs a systemd service
+  (`prgsrvdmn`) and opens ports 57605 and 57606 in firewalld or ufw.
+
+**Admin mode** means the installer runs with admin rights, i.e. as root.
+It then registers the menu entries system-wide, while `xdg-desktop-icon`
+has no system mode and would put icons on root's desktop **[inferred]**. Its
+default target becomes `/usr/local/microchip/` (user mode: `~/microchip/`).
+It runs `fp6_env_install`, offers RPS, and records the install as admin, after
+which uninstalling requires root.
+
+**Linux requirements check** (`Designer/bin/check_linux_req/`): recognises
+SUSE, Ubuntu, AlmaLinux and RHEL from `/etc/os-release`, `/etc/issue` and
+`/etc/redhat-release`; on anything else it reports "not supported" (status 44
+on this machine). It only warns and never aborts the install. As root the
+distribution-specific scripts change the system: the AlmaLinux and RHEL
+variants run `yum`, the Ubuntu variant edits `sources.list`. With a fake
+`/etc/redhat-release` present during a root install it would therefore try to
+run `yum` **[inferred]**, which does not exist on Arch.
+
+**Variables.** Kept when given on the command line: `TargetDir`,
+`CommonDir`, `LINUX_NO_SHORTCUTS`, `RPS_PORT`, `CONFIG_JSON`. Always set by
+the scripts: `SILENT_INSTALLATION` (true in CLI mode), `IS_ADMIN`,
+`MODE_OPTIONS`. In CLI mode every component script auto-rejects message
+boxes. The vendor's own message boxes have no ids, so `--auto-answer` cannot
+target them; none of them appears in an install as root.
+
+**Headless.** Nothing blocks CLI mode explicitly. The custom pages (licence,
+target, installation, RPS port), the component choice, the disk-space check
+and the uninstaller's removal of the target directory live in GUI page
+callbacks, so they do not run in CLI mode. Commented-out automation calls
+suggest the vendor tried and gave up. `Libero_SoC` and `SmartHLS` are default
+components.
+
+**The `.sh` launcher** of the web installer maps `--root` to `TargetDir` and
+`--no-shortcuts` to `LINUX_NO_SHORTCUTS=true`, puts the IFW cache under
+`$TMPDIR`, and refuses several CLI commands (remove, update, list, search
+and others). The `.bin` is the IFW binary itself with the generic CLI.
+
+### Hard-coded install paths [verified 2026-11-18]
+
+- **Launchers.** `Designer/bin/libero` runs `../bin64/<its own name>` relative
+  to `dirname $0`, without resolving symlinks. `bin64/libero` resolves one
+  level of symlink by parsing `ls -ld`, which breaks on relative targets,
+  then sources `actel_setup_vars_nomotif` unless `ACTEL_SKIP_VAR_SETUP` is
+  set. A packaged `/usr/bin/libero` must therefore call the launcher by its
+  full path, not be a symlink to it.
+- **Text files containing `/opt/microchip`:** nine. `LiberoConfig.txt`;
+  `Designer/data/install.def`, which holds the install location, the IP vault
+  (`<common>/vault`), the ModelSim, QuestaSim, Synplify and Identify locations
+  and Questa library defaults; and the seven `.desktop` and `.directory`
+  files. `maintenancetool.ini` also stores the common dir (UTF-16 encoded);
+  its target dir is stored as relocatable.
+- **Binaries:** no ELF file checked (`libero_bin`, `sdebug_bin`, `synbatch`,
+  both `vsim`, `libcyusb.so`) contains the path.
+
+All of these are written at install time from `TargetDir` and `CommonDir`,
+none is a build-time constant. Any target can be chosen at install time;
+moving an installed tree means rewriting `install.def`, the entries and
+`maintenancetool.ini`.
+
 ### Files outside `/opt` [verified 2026-11-18]
 
 Inventory on the owner's machine after the 2026.1 web install as a normal
@@ -746,11 +827,24 @@ is for.
   by `fp6_env_install` **[doc]**. Libero logs "Cannot search for FP6
   programmers. cyusb.conf file not present under /etc folder" **[verified]**;
   harmless without FP6 hardware.
+- `Designer/bin/fp6_env_install` **[verified 2026-11-18 by reading it]**
+  needs root and is run by the installer in admin mode only. It adds the
+  FlashPro6 (`1514 2009`) to `/etc/cyusb.conf`, creating the file if needed,
+  and appends to `/etc/udev/rules.d/88-cyusb.rules` a rule that gives **every**
+  USB device of vendor 1514 mode 666 (no group). It does not reload udev and
+  touches no kernel module. With `-t DIR` it writes the two files into `DIR`
+  instead. Its uninstall step does nothing, so both files stay behind. There is
+  no `udev_install` in 2026.1.
 - `ftdi_sio` conflict: the embedded FlashPro5 is a 4-channel FTDI device;
   channel A is JTAG, B to D are UARTs. Vendor kit docs and the ArchWiki
-  describe unbinding `ftdi_sio` from interface 0 **[doc]**. On this machine
-  the programmer worked with the permissions rule alone; whether `ftdi_sio`
-  was loaded was never checked. Treat the unbind rule as possibly needed.
+  describe unbinding `ftdi_sio` from interface 0 **[doc]**. Checked
+  2026-11-18 on kernel 6.18 (CachyOS LTS) with the board attached
+  **[verified]**: `ftdi_sio` is loaded, but its built-in match for `1514:2008`
+  covers interface 2 only (module alias ending in `in02`). Interface 2, a
+  UART, is bound to `ftdi_sio`; interfaces 0, 1 and 3 have no driver. The JTAG
+  channel is therefore never claimed, and the unbind rule is not needed on
+  this kernel. Whether the match is upstream, and since which kernel version,
+  was not checked. The vendor scripts contain no `ftdi_sio` handling.
 - Earlier hardware issue: scan chain failed with `TDO stuck at 1` (board
   power, JTAG-select jumper or wrong target board suspected). Programming
   worked on 2026-11-16 **[verified]**, so it was not a software problem.

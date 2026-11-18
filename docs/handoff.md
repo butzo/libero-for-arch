@@ -33,10 +33,10 @@ as `<wifi-mac>` refer to entries in that file.
 - The main package, `libero-soc`, does not exist yet. The headless install of
   the vendor software has not been tried.
 
-Next: test-plan.md checklist items 3, 7, 9 and 10 while the current install
-still exists (phase 0 is complete, including the backup and the inventory of
-files outside `/opt`), then the headless-install check (items 1 and 2), then
-phase 1 (uninstall) and round 1 of phase 2.
+Next: the headless-install check, test-plan.md items 1 and 2, into a
+throwaway root and with temporary space on disk (design.md section 8 lists
+what the installer scripts imply for it). Then phase 1 (uninstall) and round
+1 of phase 2. Phase 0 and checklist items 3, 5 to 7, 9 and 10 are done.
 
 ## 0. How to read this document
 

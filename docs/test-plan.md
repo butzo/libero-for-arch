@@ -174,6 +174,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    `installscript*.js` from the IFW cache (`~/.cache/qt-installer-framework/`)
    for the post-install steps, the Linux requirements check, and the exact
    desktop-entry and driver actions. Read only; do not commit them.
+   Done 2026-11-18, see "What the installer scripts do" in findings.md
+   section 3 (the IFW cache was empty; the scripts came from the repository
+   metadata and the installer binary).
 4. Locate the stable download URL of the web installer and its published
    checksum, if any (`microchip.com/Libero`, "Download Software").
 5. Done 2026-11-13, see "Dependency list" in section 4. Remaining: confirm
@@ -216,10 +219,14 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    and wait for `libero_bin`, or call `libero_bin` directly.
 7. Read `Designer/bin/libero` (how it builds `LD_LIBRARY_PATH`, what it does
    with `/etc/redhat-release`) and `grep -rIl '/opt/microchip'` over the
-   tree to learn what `maintenancetool` relocation implies.
+   tree to learn what `maintenancetool` relocation implies. Done 2026-11-18,
+   see "Hard-coded install paths" in findings.md section 3.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
+   Done 2026-11-18: only `fp6_env_install`, see findings.md section 6.
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
+   Done 2026-11-18: no, the kernel claims interface 2 only, see findings.md
+   section 6.
 11. Done 2026-11-17 **[verified]**: one full flow has run on Arch. Synthesis,
     P&R, bitstream generation, programming and a simulation started from
     Libero all work, see section 4. No missing library turned up in any of

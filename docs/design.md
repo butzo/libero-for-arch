@@ -60,6 +60,33 @@ require explicit agreement, run the headless install from section 3 with
 `libero-setup remove` calls `maintenancetool purge` and cleans up.
 `libero-setup status` reports installed version, free space, licence state.
 
+Consequences of the installer scripts (findings.md section 3, 2026-11-18):
+
+- Run as root, the installer is in admin mode. Pass the target and common dir
+  explicitly (`--root /opt/microchip/Libero_SoC_<ver>`,
+  `CommonDir=/opt/microchip/common`), pass `LINUX_NO_SHORTCUTS=true` so that
+  no menu entries or icons go system-wide or onto root's desktop (the package
+  ships its own), select `Libero_SoC` with `--no-default-installations`
+  (SmartHLS is a default component), and never select RPS.
+- Admin mode runs `fp6_env_install`, which gives every Microchip USB device
+  mode 666 through `/etc/udev/rules.d/88-cyusb.rules` and writes
+  `/etc/cyusb.conf`, outside pacman's knowledge. `libero-setup install` must
+  replace that rule with the package's `uaccess` rule afterwards, and decide
+  who owns `/etc/cyusb.conf`. Open decision.
+- Temporary space: point `TMPDIR` and `--cache-path` at
+  `/var/cache/libero-soc` on disk. A RAM-backed `/tmp` cannot hold the
+  12.5 GB download (7.6 GB on the owner's machine).
+- No fake `/etc/redhat-release` may exist while the installer runs, or the
+  requirements check runs `yum` as root. Apply the shims after the install,
+  or keep them inside the wrapper's namespace (shim option 2).
+- In CLI mode the installer rejects every prompt, so the target directory
+  must be empty or absent.
+- Uninstall: `maintenancetool purge` as root. The vendor's removal of the
+  target directory is GUI-only, so `libero-setup remove` deletes the tree
+  itself, plus the `fp6_env_install` files.
+- `/usr/bin/libero` must call `<install>/Libero_SoC/Designer/bin/libero` by
+  its full path; a symlink to it breaks the vendor launcher.
+
 `libero-license install <file>` (written, covered by
 `tests/libero-license.test.sh`): validate that the file's SERVER hostid
 matches a physical interface on this machine, rewrite the SERVER hostname and
