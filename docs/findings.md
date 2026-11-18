@@ -265,6 +265,65 @@ and confirm the bundled set works with 2026.1 before building on it.
 - Environment used for the successful run: `IATEMPDIR=$HOME/tmp/ia`,
   `_JAVA_AWT_WM_NONREPARENTING=1`. Neither was shown to be necessary.
 
+### Files outside `/opt` [verified 2026-11-18]
+
+Inventory on the owner's machine after the 2026.1 web install as a normal
+user, two months of use, and the `libero-flexlm` package. Found by name
+(Actel, Microsemi, Microchip, Libero, ModelSim, Synplify and similar) in the
+home directory to depth 4, by content in `/etc`, and by checking each path
+with `pacman -Qo`. Root's home was not checked; the install ran as the user.
+This is the checklist for phase 1 and for `libero-setup remove`.
+
+Written by the vendor installer:
+
+| Path | Content |
+|---|---|
+| `~/.local/share/applications/Microchip-{Libero_SoC,FPExpress,PFSoC_MSS_Configurator,Program_Debug,SmartHLS}_2026.1.desktop` | Menu entries, one per tool, including SmartHLS |
+| `~/Microchip-*_2026.1.desktop` (the same five) | Copies directly in the home directory |
+| `~/.local/share/desktop-directories/Microchip-Microchip.directory`, `~/.config/menus/applications-merged/user-Microchip-Microchip.menu` | "Microchip" submenu |
+| `~/.cache/qt-installer-framework/` | Installer cache, empty |
+
+Written by the tools at run time (user settings and caches):
+
+| Path | Content |
+|---|---|
+| `~/.actel/` (14 MB) | `libero.def`, `flashpro.def`, `dsma.ini`, `PlannerColorSettings.ini`, `UserPresets/`, `template/`, and `repository_cache/` (13.9 MB, IP catalogue cache) |
+| `~/.actel.<hostname>` | Empty file |
+| `~/.config/Actel/` | `Libero.conf`, `libero.2026.1.0.17.conf`, `FlashPro Express.conf`, `SmartDebug.conf`, `PolarFireSoC MSS Configurator.conf` |
+| `~/.config/Microsemi/` | I/O Editor settings |
+| `~/.modelsim`, `~/.modelsim.bak` | ModelSim GUI preferences, written by `vish` |
+
+Arch fixes made by hand (sections 4 to 7):
+
+| Path | Owner | Replaced in the package by |
+|---|---|---|
+| `/etc/redhat-release` | none | the shim chosen in section 8 |
+| `/etc/pki/tls/certs/ca-bundle.crt` (link) and `/etc/pki/tls/` | none (`/etc/pki` itself belongs to `fwupd`) | the shim chosen in section 8 |
+| `/etc/udev/rules.d/70-microchip-flashpro.rules` | none | `/usr/lib/udev/rules.d/` in `libero-soc` |
+| `~/.local/bin/libero`, `~/.local/share/applications/Microchip-Libero_SoC_2026.1.desktop` | dotfiles (the entry replaces the installer's) | `/usr/bin/libero`, `/usr/share/applications/` in `libero-soc` |
+
+Packages installed explicitly for Libero on 2026-09-08, required by nothing
+else: `libpng15` (AUR, installer only), `libxml2-legacy`,
+`ncurses5-compat-libs`. The other dependencies of section 4 (`gtk2`,
+`libxcrypt-compat`, the `lib32-*` set, `numactl`, `libtirpc`, `gperftools`,
+`pciutils`) are present on this machine because other software needs them.
+
+Leftovers from earlier versions and experiments, not part of a normal
+install: eight menu entries for 2025.2 whose target `~/microchip/` no longer
+exists, an empty `~/distrobox/libero`, and the downloaded web installer in
+`~/tmp/` (zip and extracted copy, about 520 MB).
+
+Not found: `~/.flexlmrc`, `/etc/cyusb.conf`, FlexLM lock directories outside
+the licence service's private `/tmp`, anything in `/usr/local`, other files in
+`/etc` that mention Libero or Microchip.
+
+Consequences for `libero-setup remove`: the installer's files are removed
+always; the run-time settings and caches only with `--purge`, because they
+are user data. They live in every user's home, so the root tool can only list
+them or act for the user who runs it. The installer writes its menu entries
+for the installing user; when the setup tool installs as root they would land
+in root's home, which round 1 has to check.
+
 ## 4. Runtime fixes that were needed on Arch
 
 Each row is a failure that was hit, in order.

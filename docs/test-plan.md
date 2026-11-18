@@ -89,7 +89,8 @@ has to do, and is cheaper now than after a wipe.
 7. **Inventory of files outside `/opt`.** List what the vendor install and
    first runs created in the home directory (desktop entry, installer cache
    under `~/.cache/qt-installer-framework`, tool configuration folders) and in
-   `/etc`. This is the checklist for phase 1.
+   `/etc`. This is the checklist for phase 1. Done 2026-11-18, see "Files
+   outside `/opt`" in findings.md section 3.
 
 ## Phase 1: uninstall
 
