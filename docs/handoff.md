@@ -34,9 +34,9 @@ as `<wifi-mac>` refer to entries in that file.
   the vendor software as root works (findings.md section 3); a test install
   sits in `/opt/microchip-test`.
 
-Next, using the test install in `/opt/microchip-test`: run Libero from the
-root-owned tree as a normal user (round 2 questions: Arch fixes, IP vault
-permissions), and try the vendor uninstaller on it (`maintenancetool purge`).
+Next, using the test install in `/opt/microchip-test`: the programmer scan
+from it (the rest of round 2 passed, findings.md section 3), and the vendor
+uninstaller on it (`maintenancetool purge`).
 Then write `libero-setup` and the `libero-soc` package, then phase 1 on the
 real install. Phase 0 and checklist items 1 to 3, 5 to 7, 9 and 10 are done.
 

@@ -381,6 +381,30 @@ directory. As a normal user the non-admin warning box was answered "Cancel";
 `search` continued regardless, but an `install` as a normal user might stop
 there **[untested]**.
 
+Root's home directory was checked afterwards with `find -newer` against a
+marker file: the root install wrote nothing there **[verified]**.
+
+### Libero run from the root-owned test install [verified 2026-11-18]
+
+The test install above, unmodified (no libstdc++ fix in its `lib64/rhel`),
+started as the owner's normal user inside a pseudo-terminal, with the fake
+`/etc/redhat-release` in place and the licence from the `libero-flexlm`
+service. Project: a copy of the owner's GNSS project with its four tool paths
+pointed at the test tree.
+
+- **Flow:** reported by the owner: no licence popup, synthesis, place and
+  route, bitstream generation and pre-synthesis simulation (ModelSim GUI)
+  all worked. Terminal output contained nothing but the known ini notes.
+  So the fake `redhat-release` alone is enough on a pristine tree; the
+  libstdc++ change is not needed.
+- **IP vault:** the configured vault, `<common>/vault`, did not exist and
+  could not be created by the user (common dir root-owned, mode 755). Libero
+  did not complain: two seconds after start it created a per-user vault in
+  `~/.actel/vault` and downloaded the cores the project needed there (436
+  files, 249 MB). The vault in the common dir stayed empty.
+- **Also written:** `~/.config/Actel/Default.conf` (window geometry).
+- **Programmer:** not yet checked against this tree.
+
 ### Hard-coded install paths [verified 2026-11-18]
 
 - **Launchers.** `Designer/bin/libero` runs `../bin64/<its own name>` relative

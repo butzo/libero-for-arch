@@ -103,6 +103,15 @@ it raised:
 - **Shims after install.** The fake `/etc/redhat-release` had to be moved
   aside for the install and restored afterwards; the package must order it
   the same way or use shim option 2.
+- **IP vault.** With a root-owned common dir, Libero falls back to a per-user
+  vault in `~/.actel/vault` without complaint (findings.md section 3). That
+  needs no writable system directory, at the cost of one copy of the cores
+  per user. Proposed: keep the common dir root-owned and rely on the
+  fallback; a shared, group-writable vault is an opt-in at most. The
+  `--purge` cleanup of `libero-setup remove` then has to mention
+  `~/.actel/vault`.
+- **libstdc++.** Not needed: the pristine tree runs with the fake
+  `redhat-release` alone (libstdc++ option "none").
 
 `libero-license install <file>` (written, covered by
 `tests/libero-license.test.sh`): validate that the file's SERVER hostid
