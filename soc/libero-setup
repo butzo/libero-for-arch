@@ -25,12 +25,16 @@ KNOWN_URL=https://ww1.microchip.com/downloads/secure/aemdocuments/documents/fpga
 KNOWN_SHA256=e646ffb9350bab5e2b9b011ee9dcf9a755f0643bf39c3fa4a305dfe1e0b3860e
 # Seconds to wait for the browser download.
 WAIT_SECONDS=3600
+# Seconds between progress lines while the vendor installer runs.
+PROGRESS_INTERVAL=15
+PROGRESS_PID=""
 DOWNLOAD_DIR=""
 if [[ -n ${LIBERO_SETUP_TEST:-} ]]; then
 	ROOT=${LIBERO_SETUP_ROOT:-}
 	MIN_FREE_GB=${LIBERO_SETUP_MIN_FREE_GB:-$MIN_FREE_GB}
 	KNOWN_SHA256=${LIBERO_SETUP_KNOWN_SHA256:-$KNOWN_SHA256}
 	WAIT_SECONDS=${LIBERO_SETUP_WAIT:-$WAIT_SECONDS}
+	PROGRESS_INTERVAL=${LIBERO_SETUP_PROGRESS_INTERVAL:-$PROGRESS_INTERVAL}
 	DOWNLOAD_DIR=${LIBERO_SETUP_DOWNLOAD_DIR:-}
 fi
 
@@ -68,6 +72,7 @@ warn() { echo "libero-setup: warning: $*" >&2; }
 info() { echo "==> $*"; }
 
 on_exit() {
+	stop_progress
 	restore_redhat_release
 	((${#TMP_FILES[@]} == 0)) || rm -rf -- "${TMP_FILES[@]}"
 }
@@ -419,6 +424,48 @@ reload_udev() {
 	udevadm trigger --subsystem-match=usb --attr-match=idVendor=1514 || true
 }
 
+# --- progress -----------------------------------------------------------------
+
+# The vendor installer is silent for minutes while it downloads and unpacks.
+# Its log names both totals; the work itself shows as growing directories.
+
+# size_gb <dir...>: their combined size in GB, one decimal.
+size_gb() {
+	{ du -sb -- "$@" 2>/dev/null || true; } | awk '{ sum += $1 } END { printf "%.1f", sum / 1e9 }'
+}
+
+# logged_total <log> <label>: the size the installer announced, e.g. "33.76 GB".
+logged_total() {
+	sed -n "s/.*$2: \"\\([0-9.]* GB\\)\".*/\\1/p" "$1" 2>/dev/null | head -n 1
+}
+
+# show_progress <target> <log>: runs until stopped.
+show_progress() {
+	local target=$1 log=$2 total last="" line
+	while sleep "$PROGRESS_INTERVAL"; do
+		if grep -q -E 'Installing component|Installation finished' "$log" 2>/dev/null; then
+			line="    finishing ..."
+		elif grep -q 'Preparing to unpack' "$log" 2>/dev/null; then
+			total=$(logged_total "$log" 'Installation space required')
+			line="    unpacked   $(size_gb "$target") of ${total:-about 34 GB}"
+		elif grep -q 'Downloading archive' "$log" 2>/dev/null; then
+			total=$(logged_total "$log" 'Temporary space required')
+			line="    downloaded $(size_gb "$CACHE_DIR/tmp" "$CACHE_DIR/ifw") of ${total:-about 12 GB}"
+		else
+			line="    preparing ..."
+		fi
+		[[ $line == "$last" ]] || echo "$line"
+		last=$line
+	done
+}
+
+stop_progress() {
+	[[ -n $PROGRESS_PID ]] || return 0
+	kill "$PROGRESS_PID" 2>/dev/null || true
+	wait "$PROGRESS_PID" 2>/dev/null || true
+	PROGRESS_PID=""
+}
+
 # --- commands -----------------------------------------------------------------
 
 run_vendor_installer() {
@@ -432,11 +479,15 @@ run_vendor_installer() {
 	mkdir -p "$CACHE_DIR/tmp"
 	make_log_dir
 	info "Running the vendor installer: about 15 minutes, 12.5 GB download. Log: $log"
+	: >"$log"
+	show_progress "$target" "$log" &
+	PROGRESS_PID=$!
 	set +e
 	TMPDIR=$CACHE_DIR/tmp "$bin" "${args[@]}" 2>&1 | tee "$log" |
 		grep --line-buffered -E 'Downloading archive|Unpacking components|Installing component|installed successfully|[Ee]rror'
 	status=${PIPESTATUS[0]}
 	set -e
+	stop_progress
 	return "$status"
 }
 

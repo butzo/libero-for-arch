@@ -84,6 +84,19 @@ while (($#)); do
 done
 [ -e "$FAKEROOT/etc/redhat-release" ] && echo present >"$W/redhat-during-install"
 echo "TMPDIR=$TMPDIR" >>"$log"
+if [ -n "${STUB_SLOW:-}" ] && [ "$cmd" = install ]; then
+	# Like the real one: announce the sizes, download, then unpack, slowly.
+	echo 'Installation space required: "0.02 GB"'
+	echo 'Temporary space required: "0.01 GB"'
+	echo 'Downloading archive "x.7z" for component Libero SoC Design Suite.'
+	mkdir -p "$TMPDIR/remoterepo-x"
+	head -c 5000000 /dev/zero >"$TMPDIR/remoterepo-x/x.7z"
+	sleep 3
+	echo 'Preparing to unpack components...'
+	mkdir -p "$root"
+	head -c 9000000 /dev/zero >"$root/payload"
+	sleep 3
+fi
 if [ "$cmd" = install ]; then
 	mkdir -p "$root/Libero_SoC/Designer/bin" "$common"
 	printf '#!/bin/sh\n' >"$root/Libero_SoC/Designer/bin/libero"
@@ -158,6 +171,7 @@ run() {
 		LIBERO_SETUP_DOWNLOAD_DIR="$W/user/Downloads" \
 		LIBERO_SETUP_KNOWN_SHA256="${KNOWN_SHA:-none}" \
 		LIBERO_SETUP_WAIT=4 \
+		LIBERO_SETUP_PROGRESS_INTERVAL=1 \
 		SUDO_USER=tester \
 		"$TOOL" "$@" </dev/null
 }
@@ -198,6 +212,15 @@ expect "a copy of the installer is kept in the cache" \
 	test -x "$FAKEROOT/var/cache/libero-soc/installer/Libero_SoC_2026.1_online_lin.bin"
 refuse "a second install refuses an existing target" \
 	run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+
+fresh install-progress
+make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+out=$(STUB_SLOW=1 run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin" 2>&1)
+expect "a long install reports download progress against the total" \
+	grep -q -E 'downloaded +[0-9.]+ of 0\.01 GB' <<<"$out"
+expect "and unpacking progress against the total" \
+	grep -q -E 'unpacked +[0-9.]+ of 0\.02 GB' <<<"$out"
+expect "and still installs" test -x "$FAKEROOT/$TARGET_REL/Libero_SoC/Designer/bin/libero"
 
 fresh install-from-zip
 make_zip "$W/downloads/$ZIP_NAME"

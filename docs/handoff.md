@@ -21,26 +21,42 @@ licence identifiers, serial numbers) are **not** in these files. They live in
 `local/machine-private.md`, which must never be committed. Placeholders such
 as `<wifi-mac>` refer to entries in that file.
 
-## Status (2026-11-18)
+## Status (2026-11-19)
 
-- The owner's hand-made install runs the whole flow on CachyOS: synthesis,
-  place and route, bitstream generation, programming, and simulation started
-  from Libero. Details in sections 4 to 7.
-- The licence server is its own package, `libero-flexlm`, installed and
-  tested on the owner's machine on 2026-11-18: it recovered from a
-  reproduced MAC-race failure by itself within about a minute (section 5).
-  The old user unit and the separately downloaded daemons are gone.
-- The main package, `libero-soc`, does not exist yet. The headless install of
-  the vendor software as root works (findings.md section 3); the test
-  install made for that has been removed again with the vendor uninstaller.
+- Both packages exist and run on the owner's machine: `libero-flexlm` (the
+  licence server, `flexlm/`) and `libero-soc` (setup tool, wrapper, shims,
+  `soc/`). The owner's hand-made install and manual fixes are gone; Libero
+  2026.1 was installed through `sudo libero-setup install` on 2026-11-18,
+  and Libero with simulation works from it (findings.md section 3).
+- The licence server recovered from a reproduced MAC-race failure by itself
+  within about a minute (section 5).
+- Not published: nothing is on the AUR yet, and the packages build from this
+  checkout, not from a release tarball.
 
-Headless install, run from a root-owned tree, and headless uninstall are all
-verified on a test install (findings.md section 3). Deferred: a programmer
-scan from a root-owned tree (no board at hand).
+Open, in rough order:
 
-Next: write `libero-setup` and the `libero-soc` package (design.md section
-8), then phase 1 on the real install. Phase 0 and checklist items 1 to 3, 5
-to 7, 9 and 10 are done.
+- Deferred tests: a programmer scan from the root-owned tree (no board at
+  hand); a long sleep in everyday use; `libero-setup remove` on the real
+  install; the browser hand-off on other desktops.
+- Side-by-side installs of several Libero versions (section 1a).
+- Publishing: AUR name clash check (test-plan.md item 8), dependencies on
+  plain Arch (item 5), release tarball as PKGBUILD source.
+- The ArchWiki article, see the notes below.
+
+## Notes for the ArchWiki article
+
+Collected wishes of the owner for the update of
+<https://wiki.archlinux.org/title/Libero>:
+
+- Describe offline use as well (2026-11-19): a machine without internet
+  access, or without a browser session. That covers getting the web
+  installer on another machine and passing it with
+  `libero-setup install --installer FILE`; what the installer itself still
+  needs from the network (it downloads 12.5 GB from Microchip's repository;
+  the vendor's `create-offline` command is untested); the IP MegaVault
+  component for IP cores without internet, which `libero-setup` does not
+  install; and that the licence server is local and needs no network once the
+  licence file is there.
 
 ## 0. How to read this document
 

@@ -433,6 +433,32 @@ dir and its parent directory. The undo step of `fp6_env_install` is an empty
 also stay (they had been removed by hand before this test). Per-user data
 (`~/.actel/vault`, settings) is not touched.
 
+### The packages replace the hand-made install [verified 2026-11-18]
+
+On the owner's machine, reported by the owner as working throughout:
+
+- **Old install removed.** `maintenancetool ... purge` as the owner's user
+  on the hand-made, user-owned install: exit 0. It removed its own menu
+  entries (the `.desktop` files, the `.directory` file and the copies in the
+  home directory were gone afterwards) but left the menu file
+  `~/.config/menus/applications-merged/user-Microchip-Microchip.menu` and,
+  unlike the root test install, the target directory itself. `/opt/microchip`
+  and the manual fixes in `/etc` were then deleted by hand.
+- **Package install.** `libero-soc` 0.1.0-2 installed with pacman, then
+  `sudo libero-setup install` without arguments: installer obtained through
+  the browser hand-off, agreement accepted, vendor install into
+  `/opt/microchip/Libero_SoC_2026.1`.
+- **Licence.** `sudo libero-license install /var/lib/libero-flexlm/License.dat`
+  pointed the server at the new tree.
+- **Use.** Libero starts from the menu entry and the wrapper, and simulation
+  from Libero works.
+- **Complaint.** The vendor installer runs for many minutes without output,
+  so that the owner nearly aborted it. `libero-setup` now prints progress:
+  the size of the download and then of the target directory, against the
+  totals the installer logs. Not yet seen on a real install.
+
+Not reported: whether the browser opened by itself from the `sudo` command.
+
 ### Hard-coded install paths [verified 2026-11-18]
 
 - **Launchers.** `Designer/bin/libero` runs `../bin64/<its own name>` relative
