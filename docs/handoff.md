@@ -35,12 +35,15 @@ as `<wifi-mac>` refer to entries in that file.
 
 Open, in rough order:
 
-- Deferred tests: a programmer scan from the root-owned tree (no board at
-  hand); a long sleep in everyday use; `libero-setup remove` on the real
-  install; the browser hand-off on other desktops.
-- Side-by-side installs of several Libero versions (section 1a).
-- Publishing: AUR name clash check (test-plan.md item 8), dependencies on
-  plain Arch (item 5), release tarball as PKGBUILD source.
+- Deferred tests: `libero-setup remove` on the real install; the progress
+  display on a real install; the browser hand-off on other desktops. Done
+  since: the programmer is found from the root-owned install (2026-11-20),
+  and the licence server was healthy after two days of normal use.
+- Side-by-side installs of several Libero versions, and menu entries for all
+  tools as Microchip's installer creates them (owner's wish, 2026-11-20).
+- Publishing: dependencies on plain Arch (test-plan.md item 5), release
+  tarball as PKGBUILD source. The names `libero-soc` and `libero-flexlm` are
+  free on the AUR (checked 2026-11-20).
 - The ArchWiki article, see the notes below.
 
 ## Notes for the ArchWiki article

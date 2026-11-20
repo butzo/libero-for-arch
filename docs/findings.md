@@ -415,7 +415,11 @@ pointed at the test tree.
   `~/.actel/vault` and downloaded the cores the project needed there (436
   files, 249 MB). The vault in the common dir stayed empty.
 - **Also written:** `~/.config/Actel/Default.conf` (window geometry).
-- **Programmer:** not checked against this tree; no board was at hand.
+- **Programmer:** not checked against this test tree. Checked 2026-11-20 on
+  the package-made, root-owned install **[verified]**: with only the
+  package's rule (`70-libero-soc.rules`), udev shows the embedded FlashPro5
+  tagged `uaccess` and `seat`, and Libero's "Select Programmer" dialog lists
+  it as a local FlashPro5 on USB 2.0, selected. No programming run was made.
 
 ### Headless uninstall as root [verified 2026-11-18]
 

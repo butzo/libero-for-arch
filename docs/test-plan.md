@@ -231,6 +231,9 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    tree to learn what `maintenancetool` relocation implies. Done 2026-11-18,
    see "Hard-coded install paths" in findings.md section 3.
 8. `paru -Ss libero; paru -Ss microsemi; paru -Ss flashpro` : AUR name clash check.
+   Done 2026-11-20 through the AUR's RPC interface: `libero-soc`,
+   `libero-flexlm` and `libero` are free, and nothing related to Libero or
+   FlashPro exists there or in the official repositories.
 9. `find /opt/microchip -name '*.rules' -o -name 'udev_install' -o -name 'fp6_env_install'`
    Done 2026-11-18: only `fp6_env_install`, see findings.md section 6.
 10. `lsmod | grep ftdi_sio` with the board attached; is interface 0 bound?
