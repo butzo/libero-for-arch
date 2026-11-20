@@ -457,7 +457,9 @@ On the owner's machine, reported by the owner as working throughout:
   the size of the download and then of the target directory, against the
   totals the installer logs. Not yet seen on a real install.
 
-Not reported: whether the browser opened by itself from the `sudo` command.
+The browser opened by itself from the `sudo` command, on Hyprland
+(reported by the owner). The link is printed as well, for desktops where it
+does not.
 
 ### Hard-coded install paths [verified 2026-11-18]
 
