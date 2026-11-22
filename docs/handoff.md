@@ -21,13 +21,17 @@ licence identifiers, serial numbers) are **not** in these files. They live in
 `local/machine-private.md`, which must never be committed. Placeholders such
 as `<wifi-mac>` refer to entries in that file.
 
-## Status (2026-11-19)
+## Status (2026-11-22)
 
 - Both packages exist and run on the owner's machine: `libero-flexlm` (the
   licence server, `flexlm/`) and `libero-soc` (setup tool, wrapper, shims,
   `soc/`). The owner's hand-made install and manual fixes are gone; Libero
   2026.1 was installed through `sudo libero-setup install` on 2026-11-18,
   and Libero with simulation works from it (findings.md section 3).
+- `libero-soc` 0.2.0 supports several Libero versions side by side and
+  writes Microchip's four menu entries per version; installed on the
+  owner's machine on 2026-11-22, where the upgrade migrated the existing
+  install and the entries appear.
 - The licence server recovered from a reproduced MAC-race failure by itself
   within about a minute (section 5).
 - Not published: nothing is on the AUR yet, and the packages build from this
@@ -35,18 +39,23 @@ as `<wifi-mac>` refer to entries in that file.
 
 Open, in rough order:
 
-- Deferred tests: `libero-setup remove` on the real install; the progress
-  display on a real install; the browser hand-off on other desktops. Done
-  since: the programmer is found from the root-owned install (2026-11-20),
-  and the licence server was healthy after two days of normal use.
-- Side-by-side installs of several Libero versions, and menu entries for all
-  tools as Microchip's installer creates them (owner's wish, 2026-11-20).
-- Publishing: dependencies on plain Arch (test-plan.md item 5), release
-  tarball as PKGBUILD source. The names `libero-soc` and `libero-flexlm` are
-  free on the AUR (checked 2026-11-20).
-- The ArchWiki article: drafted 2026-11-22 in `docs/archwiki/` (branch
-  `docs-archwiki-article`). Publish only after the gate in
-  `docs/archwiki/README.md`; recheck the statements listed there.
+- Deferred tests: the progress display on a real install; the browser
+  hand-off on other desktops. Done since: the programmer is found from the
+  root-owned install (2026-11-20), the licence server was healthy after two
+  days of normal use, all four menu entries start their tools, and
+  `libero-setup remove` worked on the real install (2026-11-22).
+- Side-by-side versions: built in 0.2.0, but only tested with stubs; a real
+  second version needs a second Libero release, and its download link and
+  checksum added to `libero-setup`.
+- A test on plain Arch, ideally a VM with a desktop: `gtk2` and
+  `ncurses5-compat-libs` come from the AUR there, `multilib` must be enabled,
+  and fonts and the kernel's `ftdi_sio` match are unchecked (findings.md
+  section 3, "Plain Arch compared with CachyOS").
+- Publishing: release tarball as PKGBUILD source. The names `libero-soc` and
+  `libero-flexlm` are free on the AUR (checked 2026-11-20).
+- The ArchWiki article: drafted 2026-11-22 in `docs/archwiki/`. Publish only
+  after the gate in `docs/archwiki/README.md`; recheck the statements listed
+  there. See also the notes below.
 - Bug, found 2026-11-22, not fixed: `libero-setup install --installer
   <file>.bin` runs a bare `.bin` as root **without any checksum check and
   without a warning** (`prepare_installer` in `soc/libero-setup`, the `*)`

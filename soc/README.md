@@ -42,8 +42,29 @@ Some dependencies are AUR packages (`libpng15`, and on plain Arch
 4. Start Libero from the menu, or with `libero [project.prjx | project dir]`.
 
 `sudo libero-setup status` checks the installation. `sudo libero-setup
-remove` runs the vendor's uninstaller; `--purge` also removes the saved
-agreement, the cached installer and the logs.
+remove VERSION` runs the vendor's uninstaller; `--purge` also removes the
+saved agreement, the cached installer and the logs.
+
+## Several versions and the menu
+
+Each `libero-setup install` adds a version next to the ones already there, in
+`/opt/microchip/Libero_SoC_<version>`; projects opened in a newer Libero are
+converted for good, so old projects can stay on their version. For every
+version the menu gets the four entries Microchip's own installer creates,
+with its icons: "Libero SoC", "PFSoC MSS Configurator", "Program Debug"
+(SmartDebug) and "FPExpress", each with the version in its name. They are
+written to `/usr/local/share/applications` and start through the wrapper:
+
+```sh
+libero                               # newest Libero
+libero --version 2026.1 project.prjx # a given version
+libero --tool fpexpress              # also: mss, program-debug
+```
+
+`sudo libero-setup remove 2026.1` removes one version and its entries. If
+the licence server used that version's daemons, it is moved to the newest
+remaining one. Only the installer of the newest known version is fetched
+automatically; another version's installer is passed with `--installer`.
 
 ## What the package changes on the system
 
@@ -52,7 +73,8 @@ agreement, the cached installer and the logs.
 | `/etc/redhat-release` | Says "AlmaLinux release 9.6". The vendor's start script reads it to pick a library path; without it, Libero loads an old bundled libstdc++ that clashes with Arch's libraries. Other software that reads this file will take the system for AlmaLinux. |
 | `/etc/pki/tls/certs/ca-bundle.crt` | Link to Arch's CA bundle; the IP catalogue download looks for it at the RHEL path. |
 | `/usr/lib/udev/rules.d/70-libero-soc.rules` | Gives the user at the seat access to Microchip programmers (USB vendor 1514). |
-| `/usr/bin/libero`, menu entry | Start Libero with the right environment: X11 through XWayland, the licence server, and a pseudo-terminal, without which ModelSim cannot open from Libero. |
+| `/usr/bin/libero` | Starts Libero and its tools with the right environment: X11 through XWayland, the licence server, and a pseudo-terminal, without which ModelSim cannot open from Libero. |
+| `/usr/lib/libero-soc/` | Helpers of `libero-setup`, among them a reader for the resources inside Microchip's installer (agreement and icons). |
 
 What `libero-setup install` does beyond running the vendor installer:
 
@@ -63,8 +85,8 @@ What `libero-setup install` does beyond running the vendor installer:
   replaces it.
 - It keeps the vendor's `/etc/cyusb.conf`, which FlashPro6 programmers need.
   `libero-setup remove` removes its FlashPro6 entry again.
-- It saves the agreement and a record of your consent in
-  `/var/lib/libero-soc/`, and the Libero icon from the installer.
+- It saves the agreement, a record of your consent and the four tool icons
+  from the installer in `/var/lib/libero-soc/installs/<version>/`.
 
 ## Notes
 

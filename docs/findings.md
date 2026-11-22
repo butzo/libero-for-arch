@@ -459,11 +459,128 @@ On the owner's machine, reported by the owner as working throughout:
 - **Complaint.** The vendor installer runs for many minutes without output,
   so that the owner nearly aborted it. `libero-setup` now prints progress:
   the size of the download and then of the target directory, against the
-  totals the installer logs. Not yet seen on a real install.
+  totals the installer logs. Seen on a real install on 2026-11-22: one
+  "downloaded X of 11.69 GB" line every 15 seconds (see "sudo ends the
+  install 5 minutes after a fingerprint prompt" below).
 
 The browser opened by itself from the `sudo` command, on Hyprland
 (reported by the owner). The link is printed as well, for desktops where it
 does not.
+
+### Menu entries and side-by-side versions, libero-soc 0.2.0 [verified 2026-11-22]
+
+The vendor installer's own script (`installscriptLibero.js` in the public
+component metadata, read only) creates four entries per version, each with
+an icon from the installer's resources under `/libero-icons/`:
+
+| Name | Starts | Icon |
+|---|---|---|
+| Libero SoC `<version>` | `Designer/bin/libero` | `libero.xpm` |
+| PFSoC MSS Configurator `<version>` | `Designer/bin64/pfsoc_mss` | `mss.xpm` |
+| Program Debug `<version>` | `Designer/bin/sdebug` (SmartDebug) | `smart_debug.xpm` |
+| FPExpress `<version>` | `Designer/bin/FPExpress` | `fpexpress.xpm` |
+
+plus a "Microchip" submenu (`.directory` file). All four launchers are
+shell scripts of the same kind as `Designer/bin/libero`.
+
+The installer's resources are binary Qt "qres" blocks (header with offsets
+of a folder tree, a name table and a data area). They hold, by name, among
+others `/license/license_libero.txt` (byte-identical to the agreement found
+earlier by content search), `/license/license_pfs.txt`, and the icons above;
+sizes 8,920, 7,975, 5,479 and 1,540 bytes, matching the files the GUI install
+created. `qres-extract` in the package reads them without running anything
+from the installer.
+
+On the owner's machine, upgrading `libero-soc` from 0.1.0-3 to 0.2.0-1 ran
+`libero-setup refresh`: it moved the record of the existing install to
+`/var/lib/libero-soc/installs/2026.1/`, took the four icons from the cached
+installer and wrote the four entries. `libero-setup status` then showed
+"2026.1 ... (default)" with 4 entries and 4 icons; the licence server was
+unaffected. All four entries appear in the menu and start their tools
+(reported by the owner). Not yet tried: a real second version side by side
+(only 2026.1 exists; tested with stubs).
+
+`sudo libero-setup remove` on the owner's real install, 2026-11-22
+**[verified]**: the vendor uninstaller ran, the tree and the menu entries
+were removed, and the tool warned that the licence server had lost its
+daemons, since no other version was left. `libero-setup status` then
+reported "not installed". The libero-flexlm service is untouched by this;
+it needs `libero-license install` again after a new install. The run also
+showed two changes, made afterwards in `libero-setup`: `remove` now always
+asks for the version and lists the installed ones with the exact command
+for each; and the help text no longer shows a stray lint directive.
+
+### sudo ends the install 5 minutes after a fingerprint prompt [verified 2026-11-22]
+
+Two runs of `sudo libero-setup install` on the owner's machine stopped in
+the middle of the download with `zsh: terminated  sudo libero-setup install`,
+at 6.5 and 7.5 of 11.69 GB. In the journal, both sudo sessions lasted exactly
+298 seconds (20:29:08 to 20:34:06 and 20:35:46 to 20:40:44). No OOM kill or
+other killer is logged, and 321 GB were free. The progress lines kept coming
+until the end, so the vendor installer was still downloading.
+
+- **Only runs that prompted died.** sudo caches credentials per terminal for
+  5 minutes. Every sudo run on that machine that lasted over 5 minutes
+  started within 5 minutes of an earlier sudo on the same terminal, so it
+  showed no prompt: the install of 2026-11-19 (953 s), pacman runs of
+  1778 s and 369 s. Both failed runs came after longer gaps, so they
+  prompted ("Enter Password or Place finger on fingerprint reader").
+- **Check.** A third run started 10 s after another sudo, without a prompt.
+  It was still downloading after 6.5 minutes (9.9 GB) and finished after
+  13 minutes 18 seconds (sudo session 20:51:10 to 21:04:28): `libero-setup
+  status` showed 2026.1 in `/opt/microchip/Libero_SoC_2026.1` with 4 menu
+  entries and 4 icons, and the owner reported the install as working.
+- **Setup.** `/etc/pam.d/sudo` starts with `pam_fprintd_grosshack.so`, which
+  asks for the password and the finger at the same time.
+
+Mechanism **[inferred, not read from sudo's source]**: sudo's password
+prompt runs with a timer of `passwd_timeout` (5 minutes by default). When the
+finger wins, the abandoned prompt leaves that timer running; when it fires,
+sudo treats it as a command timeout and ends the command.
+
+Workarounds: `sudo -v` (finger) and then `sudo libero-setup install` within
+5 minutes; or `Defaults passwd_timeout=0` in a sudoers drop-in, which turns
+the prompt timer off (the owner's decision; not tried). `libero-setup` names
+the first in its help text, and prints it before the vendor installer when
+run through sudo.
+
+Side effects of the killed runs: the vendor installer did not resume its
+download, each run started again from zero; and empty `.staging.*`
+directories were left in `/var/cache/libero-soc/installer/`. They are harmless.
+
+### Plain Arch compared with CachyOS [doc, 2026-11-22]
+
+Every dependency of `libero-soc` checked against the official Arch package
+database and the AUR:
+
+- **AUR on plain Arch:** `gtk2` and `ncurses5-compat-libs` (both come from
+  the CachyOS repositories on the owner's machine), and `libpng15` (AUR
+  everywhere). An AUR helper builds them; `gtk2` takes a while to compile.
+- **`multilib`:** the seven `lib32-*` packages for the 32-bit ModelSim need
+  the `multilib` repository, which plain Arch does not enable by default.
+- Everything else is in `core` or `extra`.
+
+Further differences, not tested **[inferred]**:
+
+- **No desktop and no fonts** after a plain install. Libero is a GUI program;
+  a desktop session (Wayland with XWayland, or Xorg) and at least one font
+  package are needed. On a machine without a desktop, the parts that make
+  sense are the licence server (`libero-flexlm`, also as a floating-licence
+  server for other machines) and `libero-setup install` itself, which runs
+  the vendor installer without a display. Whether Libero's batch mode
+  (`libero SCRIPT:...`) runs without a display was not checked; `xvfb-run`
+  would be the fallback.
+- **No browser** on such a machine: `libero-setup install` prints the link;
+  the zip is downloaded elsewhere and passed with `--installer`.
+- **Network managers:** the Wi-Fi address randomisation that the licence
+  watchdog covers was seen with NetworkManager. `iwd` or
+  `systemd-networkd` behave differently; the watchdog works the same way,
+  but the frequency of the problem may differ.
+- **Kernel:** the `ftdi_sio` match that leaves the FlashPro5's JTAG interface
+  free was seen on the CachyOS LTS kernel; whether the plain Arch kernel has
+  the same match was not checked.
+
+### Hard-coded install paths [verified 2026-11-18]
 
 ### Hard-coded install paths [verified 2026-11-18]
 

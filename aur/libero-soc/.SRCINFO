@@ -1,6 +1,6 @@
 pkgbase = libero-soc
 	pkgdesc = Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)
-	pkgver = 0.1.0
+	pkgver = 0.2.0
 	pkgrel = 4
 	url = https://github.com/butzo/libero-for-arch
 	install = libero-soc.install
@@ -19,6 +19,7 @@ pkgbase = libero-soc
 	depends = less
 	depends = systemd
 	depends = ca-certificates
+	depends = python
 	depends = xdg-utils
 	depends = xdg-user-dirs
 	depends = libpng15

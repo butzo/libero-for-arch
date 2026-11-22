@@ -1,0 +1,125 @@
+#!/usr/bin/python3 -I
+"""qres-extract: read files out of the Qt resource blocks inside a file.
+
+Qt installers carry their resources as binary "qres" blocks: a header with
+the offsets of a folder tree, a name table and a data area. This reads them
+without running anything from the file.
+
+    qres-extract list FILE                  print the path of every resource
+    qres-extract get FILE PATH [OUT]        write one resource (default: stdout)
+
+PATH is like /libero-icons/libero.xpm. Exit status 1 when it is not found.
+"""
+import struct
+import sys
+import zlib
+
+MAGIC = b"qres"
+MAX_ENTRIES = 100000
+MAX_SIZE = 64 * 1024 * 1024
+
+
+def blocks(data):
+    """Yield (tree, names, payload, version) for every plausible qres block."""
+    start = 0
+    while True:
+        at = data.find(MAGIC, start)
+        if at < 0:
+            return
+        start = at + 1
+        if at + 20 > len(data):
+            continue
+        version, tree, payload, names = struct.unpack_from(">IIII", data, at + 4)
+        if version not in (1, 2, 3):
+            continue
+        ends = [tree, payload, names]
+        if any(o < 20 or at + o >= len(data) for o in ends):
+            continue
+        yield at + tree, at + names, at + payload, version
+
+
+def name_at(data, names, offset):
+    pos = names + offset
+    (length,) = struct.unpack_from(">H", data, pos)
+    raw = data[pos + 6 : pos + 6 + 2 * length]
+    return raw.decode("utf-16-be")
+
+
+def walk(data, tree, names, version):
+    """Yield (path, flags, data_offset) of every file in one block."""
+    size = 14 if version == 1 else 22
+    seen = set()
+    stack = [(0, "")]
+    while stack:
+        index, prefix = stack.pop()
+        if index in seen or len(seen) > MAX_ENTRIES:
+            continue
+        seen.add(index)
+        entry = tree + index * size
+        name_off, flags = struct.unpack_from(">IH", data, entry)
+        name = "" if index == 0 else name_at(data, names, name_off)
+        path = prefix + "/" + name if index else ""
+        if flags & 2:
+            count, first = struct.unpack_from(">II", data, entry + 6)
+            if count > MAX_ENTRIES:
+                continue
+            for child in range(first, first + count):
+                stack.append((child, path))
+        else:
+            (offset,) = struct.unpack_from(">I", data, entry + 10)
+            yield path, flags, offset
+
+
+def resources(data):
+    for tree, names, payload, version in blocks(data):
+        try:
+            for path, flags, offset in walk(data, tree, names, version):
+                yield path, flags, payload + offset
+        except (struct.error, UnicodeDecodeError):
+            continue
+
+
+def content(data, flags, at):
+    (size,) = struct.unpack_from(">I", data, at)
+    if size > MAX_SIZE:
+        raise ValueError("resource too large")
+    raw = data[at + 4 : at + 4 + size]
+    if flags & 1:
+        return zlib.decompress(raw[4:])
+    if flags & 4:
+        raise ValueError("zstd-compressed resources are not supported")
+    return raw
+
+
+def main(argv):
+    if len(argv) < 3 or argv[1] not in ("list", "get"):
+        sys.stderr.write(__doc__)
+        return 2
+    with open(argv[2], "rb") as handle:
+        data = handle.read()
+    if argv[1] == "list":
+        for path, _, _ in resources(data):
+            print(path)
+        return 0
+    if len(argv) < 4:
+        sys.stderr.write(__doc__)
+        return 2
+    for path, flags, at in resources(data):
+        if path == argv[3]:
+            try:
+                body = content(data, flags, at)
+            except (ValueError, zlib.error, struct.error) as error:
+                sys.stderr.write(f"qres-extract: {argv[3]}: {error}\n")
+                return 1
+            if len(argv) > 4:
+                with open(argv[4], "wb") as out:
+                    out.write(body)
+            else:
+                sys.stdout.buffer.write(body)
+            return 0
+    sys.stderr.write(f"qres-extract: {argv[3]} not found\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

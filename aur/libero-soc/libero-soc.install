@@ -12,12 +12,26 @@ post_install() {
          SNPSLMD_LICENSE_FILE and SALT_LICENSE_SERVER to <port>@<server>
     Details: /usr/share/doc/libero-soc/README.md
 EOF
+	libero-setup refresh >/dev/null 2>&1 || true
+}
+
+post_upgrade() {
+	# Moves the state of older releases to the per-version layout and writes
+	# the menu entries of every installed version.
+	libero-setup refresh || echo "==> libero-setup refresh failed; run it again by hand"
 }
 
 pre_remove() {
-	if [ -s /var/lib/libero-soc/install-dir ]; then
-		echo "==> Libero SoC is still installed in $(cat /var/lib/libero-soc/install-dir)."
-		echo "    Remove it first with: sudo libero-setup remove"
+	local record
+	for record in /var/lib/libero-soc/installs/*/install-dir /var/lib/libero-soc/install-dir; do
+		[ -s "$record" ] || continue
+		echo "==> Libero SoC is still installed in $(cat "$record")."
+		echo "    Remove it first with: sudo libero-setup remove $(basename "$(cat "$record")" | sed 's/^Libero_SoC_//')"
 		echo "    Afterwards only by hand: sudo <that directory>/maintenancetool -p minimal -d --confirm-command purge"
-	fi
+	done
+}
+
+post_remove() {
+	# The generated menu entries start the libero wrapper, which is gone now.
+	rm -f /usr/local/share/applications/libero-soc-*.desktop
 }
