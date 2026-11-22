@@ -465,6 +465,40 @@ The browser opened by itself from the `sudo` command, on Hyprland
 (reported by the owner). The link is printed as well, for desktops where it
 does not.
 
+### Menu entries and side-by-side versions, libero-soc 0.2.0 [verified 2026-11-22]
+
+The vendor installer's own script (`installscriptLibero.js` in the public
+component metadata, read only) creates four entries per version, each with
+an icon from the installer's resources under `/libero-icons/`:
+
+| Name | Starts | Icon |
+|---|---|---|
+| Libero SoC `<version>` | `Designer/bin/libero` | `libero.xpm` |
+| PFSoC MSS Configurator `<version>` | `Designer/bin64/pfsoc_mss` | `mss.xpm` |
+| Program Debug `<version>` | `Designer/bin/sdebug` (SmartDebug) | `smart_debug.xpm` |
+| FPExpress `<version>` | `Designer/bin/FPExpress` | `fpexpress.xpm` |
+
+plus a "Microchip" submenu (`.directory` file). All four launchers are
+shell scripts of the same kind as `Designer/bin/libero`.
+
+The installer's resources are binary Qt "qres" blocks (header with offsets
+of a folder tree, a name table and a data area). They hold, by name, among
+others `/license/license_libero.txt` (byte-identical to the agreement found
+earlier by content search), `/license/license_pfs.txt`, and the icons above;
+sizes 8,920, 7,975, 5,479 and 1,540 bytes, matching the files the GUI install
+created. `qres-extract` in the package reads them without running anything
+from the installer.
+
+On the owner's machine, upgrading `libero-soc` from 0.1.0-3 to 0.2.0-1 ran
+`libero-setup refresh`: it moved the record of the existing install to
+`/var/lib/libero-soc/installs/2026.1/`, took the four icons from the cached
+installer and wrote the four entries. `libero-setup status` then showed
+"2026.1 ... (default)" with 4 entries and 4 icons; the licence server was
+unaffected. All four entries appear in the menu (reported by the owner).
+Not yet tried: starting each of the three tools other than Libero from its
+entry, and a real second version side by side (only 2026.1 exists; tested
+with stubs).
+
 ### Hard-coded install paths [verified 2026-11-18]
 
 - **Launchers.** `Designer/bin/libero` runs `../bin64/<its own name>` relative

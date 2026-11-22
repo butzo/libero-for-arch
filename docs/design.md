@@ -21,21 +21,29 @@ and a distrobox container (second OS userland, weak host integration).
 ### Package contents (target)
 
 Two packages since 2026-11-17 (section 1a). `libero-soc`, in `soc/` and
-`aur/libero-soc/` (written 2026-11-18):
+`aur/libero-soc/` (written 2026-11-18, 0.2.0 on 2026-11-22):
 
 ```
-/usr/bin/libero                       wrapper: env vars, pseudo-terminal (section 4), vendor launcher
-/usr/bin/libero-setup                 root tool: install | remove | status
+/usr/bin/libero                       wrapper: --version, --tool, env vars, pseudo-terminal (section 4)
+/usr/bin/libero-setup                 root tool: install | remove [VERSION] | status | refresh
+/usr/lib/libero-soc/installer.sh      sourced by libero-setup: download hand-off, checks
+/usr/lib/libero-soc/qres-extract      reads the agreement and icons from the installer by name
 /usr/lib/tmpfiles.d/libero-soc.conf   /var/lib, /var/cache and /var/log/libero-soc
 /usr/lib/udev/rules.d/70-libero-soc.rules   vendor 1514, uaccess
-/usr/share/applications/libero-soc.desktop  icon from /var/lib/libero-soc/libero.xpm
 /usr/share/doc/libero-soc/README.md
 /etc/redhat-release                   shim, "AlmaLinux release 9.6"
 /etc/pki/tls/certs/ca-bundle.crt      shim, link to /etc/ssl/certs/ca-certificates.crt
 ```
 
-There is no `update` command: a new Libero version is `remove`, then
-`install` with the new installer.
+Written by `libero-setup`, not owned by pacman: per version
+`/var/lib/libero-soc/installs/<version>/` (install path, agreement record,
+icons) and four menu entries `/usr/local/share/applications/libero-soc-<version>-<tool>.desktop`,
+named and iconed like Microchip's own. The package removes the entries
+when it is removed.
+
+There is no `update` command: a new Libero version is installed next to the
+old ones with `install`; `remove VERSION` drops an old one when it is no
+longer needed.
 
 `libero-flexlm`, the licence server, in `flexlm/` and `aur/libero-flexlm/`:
 
