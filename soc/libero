@@ -1,19 +1,73 @@
 #!/bin/sh
-# libero: start Microchip Libero SoC as installed by libero-setup.
-#   libero [project.prjx | project directory] [vendor options...]
+# libero: start Microchip Libero SoC, or one of its tools, as installed by
+# libero-setup.
+#   libero [--version V] [--tool T] [project.prjx | project directory] [options...]
+#   V: an installed version (default: the newest)
+#   T: libero (default), mss (PFSoC MSS Configurator),
+#      program-debug (SmartDebug), fpexpress (FlashPro Express)
 # Output goes to ${XDG_CACHE_HOME:-~/.cache}/libero-soc/libero.log.
 
-state=/var/lib/libero-soc/install-dir
-dir=$(cat "$state" 2>/dev/null)
-if [ -z "$dir" ]; then
-	echo "libero: Libero SoC is not installed; run: sudo libero-setup install" >&2
+state=${LIBERO_SOC_STATE:-/var/lib/libero-soc}
+
+die() {
+	echo "libero: $*" >&2
 	exit 1
+}
+
+version=""
+tool=libero
+while [ $# -gt 0 ]; do
+	case $1 in
+	--version)
+		[ $# -ge 2 ] || die "--version needs a version"
+		version=$2
+		shift 2
+		;;
+	--tool)
+		[ $# -ge 2 ] || die "--tool needs a name"
+		tool=$2
+		shift 2
+		;;
+	-h | --help)
+		sed -n '2,/^$/{/^$/d;s/^# \{0,1\}//;p}' "$0"
+		exit 0
+		;;
+	--)
+		shift
+		break
+		;;
+	*) break ;;
+	esac
+done
+
+newest() {
+	for record in "$state"/installs/*/install-dir; do
+		[ -f "$record" ] && basename "$(dirname "$record")"
+	done | sort -V | tail -n 1
+}
+
+if [ -z "$version" ]; then
+	version=$(newest)
 fi
-launcher=$dir/Libero_SoC/Designer/bin/libero
-if [ ! -x "$launcher" ]; then
-	echo "libero: $launcher is missing; see: sudo libero-setup status" >&2
-	exit 1
+if [ -n "$version" ]; then
+	dir=$(cat "$state/installs/$version/install-dir" 2>/dev/null) ||
+		die "Libero $version is not installed; see: sudo libero-setup status"
+elif [ -f "$state/install-dir" ]; then
+	# Layout of libero-soc before 0.2, until 'libero-setup refresh' has run.
+	dir=$(cat "$state/install-dir")
+else
+	die "Libero SoC is not installed; run: sudo libero-setup install"
 fi
+
+case $tool in
+libero) launcher=Designer/bin/libero ;;
+mss) launcher=Designer/bin64/pfsoc_mss ;;
+program-debug) launcher=Designer/bin/sdebug ;;
+fpexpress) launcher=Designer/bin/FPExpress ;;
+*) die "unknown tool '$tool'; use libero, mss, program-debug or fpexpress" ;;
+esac
+launcher=$dir/Libero_SoC/$launcher
+[ -x "$launcher" ] || die "$launcher is missing; see: sudo libero-setup status"
 
 # The bundled Qt has no Wayland plugin; run through XWayland.
 export QT_QPA_PLATFORM=xcb
@@ -24,14 +78,13 @@ export SNPSLMD_LICENSE_FILE="${SNPSLMD_LICENSE_FILE:-1702@localhost}"
 # ModelSim and QuestaSim 2025.1 and later read only this name.
 export SALT_LICENSE_SERVER="${SALT_LICENSE_SERVER:-1702@localhost}"
 
-# A directory as first argument stands for the one .prjx file inside it.
-if [ -d "${1:-}" ]; then
+# For Libero, a directory as first argument stands for the one .prjx in it.
+if [ "$tool" = libero ] && [ -d "${1:-}" ]; then
 	project_dir=$1
 	shift
 	count=$(find "$project_dir" -maxdepth 1 -type f -name '*.prjx' | wc -l)
 	if [ "$count" -ne 1 ]; then
-		echo "libero: expected exactly one .prjx file in $project_dir, found $count" >&2
-		exit 1
+		die "expected exactly one .prjx file in $project_dir, found $count"
 	fi
 	set -- "$(find "$project_dir" -maxdepth 1 -type f -name '*.prjx')" "$@"
 fi
@@ -39,19 +92,19 @@ fi
 log_dir=${XDG_CACHE_HOME:-$HOME/.cache}/libero-soc
 mkdir -p "$log_dir"
 log=$log_dir/libero.log
-# Appended, so that two Libero windows do not overwrite each other's output.
-echo "=== $(date '+%F %T') libero $*" >>"$log"
+# Appended, so that two windows do not overwrite each other's output.
+echo "=== $(date '+%F %T') $tool $version $*" >>"$log"
 
 # ModelSim inherits Libero's stdin and opens its GUI only when that is a
 # terminal; otherwise "Simulate" runs it in batch mode and it quits at once.
-# script(1) gives Libero a pseudo-terminal of its own. script runs its
+# script(1) gives the tool a pseudo-terminal of its own. script runs its
 # command through $SHELL as one string, hence the quoting and the fixed
-# /bin/sh; the user's SHELL is restored for Libero itself.
+# /bin/sh; the user's SHELL is restored for the tool itself.
 quote() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
 cmd="exec env SHELL=$(quote "${SHELL:-/bin/sh}") $(quote "$launcher")"
 for arg in "$@"; do
 	cmd="$cmd $(quote "$arg")"
 done
-# setsid -f detaches Libero, so closing the terminal does not end it. The
+# setsid -f detaches the tool, so closing the terminal does not end it. The
 # vendor launcher must be called by its path, not through a symlink.
 SHELL=/bin/sh setsid -f script -qfc "$cmd" /dev/null </dev/null >>"$log" 2>&1

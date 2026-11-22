@@ -1,8 +1,8 @@
 # Maintainer: libero-for-arch contributors
 
 pkgname=libero-soc
-pkgver=0.1.0
-pkgrel=3
+pkgver=0.2.0
+pkgrel=1
 pkgdesc="Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)"
 arch=(x86_64)
 url="https://github.com/butzo/libero-for-arch"
@@ -10,6 +10,7 @@ license=(AGPL-3.0-or-later)
 depends=(
 	# Licence server and setup tool
 	libero-flexlm bash coreutils findutils gawk grep sed util-linux unzip less systemd ca-certificates
+	python
 	xdg-utils xdg-user-dirs
 	# The vendor web installer
 	libpng15
@@ -30,8 +31,10 @@ install=libero-soc.install
 _src() { printf %s "$startdir/../../soc"; }
 
 check() {
-	shellcheck "$(_src)/libero-setup" "$(_src)/libero"
+	shellcheck -x "$(_src)/libero-setup" "$(_src)/installer.sh" "$(_src)/libero"
+	python3 -I -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' "$(_src)/qres-extract"
 	bash "$startdir/../../tests/libero-setup.test.sh"
+	bash "$startdir/../../tests/libero-wrapper.test.sh"
 }
 
 package() {
@@ -39,7 +42,10 @@ package() {
 	src=$(_src)
 	install -Dm755 "$src/libero" "$pkgdir/usr/bin/libero"
 	install -Dm755 "$src/libero-setup" "$pkgdir/usr/bin/libero-setup"
-	install -Dm644 "$src/libero-soc.desktop" "$pkgdir/usr/share/applications/libero-soc.desktop"
+	install -Dm644 "$src/installer.sh" "$pkgdir/usr/lib/libero-soc/installer.sh"
+	install -Dm755 "$src/qres-extract" "$pkgdir/usr/lib/libero-soc/qres-extract"
+	# Menu entries are written per installed version by libero-setup, into
+	# /usr/local/share/applications, like the vendor installer's own.
 	install -Dm644 "$src/70-libero-soc.rules" "$pkgdir/usr/lib/udev/rules.d/70-libero-soc.rules"
 	install -Dm644 "$src/tmpfiles.conf" "$pkgdir/usr/lib/tmpfiles.d/libero-soc.conf"
 	install -Dm644 "$src/README.md" "$pkgdir/usr/share/doc/libero-soc/README.md"
