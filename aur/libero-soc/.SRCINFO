@@ -1,7 +1,7 @@
 pkgbase = libero-soc
 	pkgdesc = Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)
 	pkgver = 0.2.0
-	pkgrel = 2
+	pkgrel = 3
 	url = https://github.com/butzo/libero-for-arch
 	install = libero-soc.install
 	arch = x86_64

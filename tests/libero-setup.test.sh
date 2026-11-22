@@ -206,7 +206,7 @@ run() {
 		LIBERO_SETUP_WAIT=4 \
 		LIBERO_SETUP_PROGRESS_INTERVAL=1 \
 		LIBERO_SETUP_LIB="$HERE/../soc" \
-		SUDO_USER=tester \
+		SUDO_USER="${RUN_SUDO_USER-tester}" \
 		"$TOOL" "$@" </dev/null
 }
 
@@ -283,6 +283,16 @@ expect "a long install reports download progress against the total" \
 expect "and unpacking progress against the total" \
 	grep -q -E 'unpacked +[0-9.]+ of 0\.02 GB' <<<"$out"
 expect "and still installs" test -x "$FAKEROOT/$TARGET_REL/Libero_SoC/Designer/bin/libero"
+
+fresh install-sudo-hint
+make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+out=$(run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin" 2>&1)
+expect "an install through sudo names 'sudo -v' against the 5-minute stop" \
+	grep -q "terminated' after about 5 minutes: run 'sudo -v'" <<<"$out"
+fresh install-no-sudo-hint
+make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+out=$(RUN_SUDO_USER='' run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin" 2>&1)
+refuse "an install without sudo does not" grep -q "sudo -v" <<<"$out"
 
 fresh install-from-zip
 make_zip "$W/downloads/$ZIP_NAME"
@@ -554,6 +564,7 @@ refuse "an unknown command fails" run frobnicate
 out=$(run --help 2>&1)
 refuse "the help text shows no lint directives" grep -q 'shellcheck' <<<"$out"
 expect "the help text names remove with a version" grep -q 'remove VERSION' <<<"$out"
+expect "the help text names 'sudo -v' for fingerprint logins" grep -q "run 'sudo -v' first" <<<"$out"
 
 echo "passed: $passed, failed: $failed"
 [ "$failed" -eq 0 ]

@@ -9,6 +9,9 @@
 #                        Without FILE: opens the installer download in your
 #                        browser and waits for it in your download folder.
 #                        FILE: a downloaded .zip, or the .bin inside it
+#                        Takes about 15 minutes. If sudo accepts your
+#                        fingerprint, run 'sudo -v' first: otherwise sudo
+#                        may end the install 5 minutes after its prompt
 #   libero-setup remove VERSION [--purge]
 #   libero-setup status
 #   libero-setup refresh   recreate menu entries and icons (run by pacman)
@@ -73,6 +76,13 @@ TOOLS=(
 )
 # The FlashPro6 entry that the vendor's fp6_env_install adds to cyusb.conf.
 FP6_LINE='1514 2009'
+
+# A sudo fingerprint module that prompts for the password at the same time
+# (pam_fprintd_grosshack) leaves sudo's 5-minute prompt timer running when the
+# finger wins; sudo then ends the command as timed out. Credentials cached by
+# 'sudo -v' skip the prompt. See docs/findings.md.
+SUDO_TIMEOUT_HINT="    If this stops with 'terminated' after about 5 minutes: run 'sudo -v',
+    then this command again within 5 minutes."
 
 MOVED_REDHAT=""
 TMP_FILES=()
@@ -427,6 +437,7 @@ run_vendor_installer() {
 	mkdir -p "$CACHE_DIR/tmp"
 	make_log_dir
 	info "Running the vendor installer: about 15 minutes, 12.5 GB download. Log: $log"
+	[[ -z ${SUDO_USER:-} ]] || echo "$SUDO_TIMEOUT_HINT"
 	: >"$log"
 	show_progress "$target" "$log" &
 	PROGRESS_PID=$!

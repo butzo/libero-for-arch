@@ -2,7 +2,7 @@
 
 pkgname=libero-soc
 pkgver=0.2.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)"
 arch=(x86_64)
 url="https://github.com/butzo/libero-for-arch"
