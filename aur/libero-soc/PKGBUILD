@@ -2,14 +2,14 @@
 
 pkgname=libero-soc
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)"
 arch=(x86_64)
 url="https://github.com/butzo/libero-for-arch"
 license=(AGPL-3.0-or-later)
 depends=(
-	# Licence server and setup tool
-	libero-flexlm bash coreutils findutils gawk grep sed util-linux unzip less systemd ca-certificates
+	# Setup tool
+	bash coreutils findutils gawk grep sed util-linux unzip less systemd ca-certificates
 	xdg-utils xdg-user-dirs
 	# The vendor web installer
 	libpng15
@@ -22,6 +22,7 @@ depends=(
 	libxdamage libxcomposite libxcursor libxinerama libxxf86vm libxau libice libsm libxslt
 	libpulse alsa-lib krb5 nss nspr sqlite expat bzip2 xz
 )
+optdepends=('libero-flexlm: licence server on this machine (not needed with an organisation licence server)')
 checkdepends=(shellcheck zip)
 install=libero-soc.install
 

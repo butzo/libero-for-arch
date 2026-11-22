@@ -3,12 +3,14 @@
 Installs Microchip Libero SoC on Arch Linux and makes it work there. The
 package contains no Microchip software: `libero-setup` runs Microchip's own
 installer, which you download yourself, and the package adds what Arch is
-missing. The licence server comes with the `libero-flexlm` package.
+missing. A licence server on this machine comes with the optional
+`libero-flexlm` package; with an organisation licence server it is not
+needed.
 
 ## Setup
 
-Some dependencies are AUR packages (`libero-flexlm`, `libpng15`, and on plain
-Arch `ncurses5-compat-libs`), and the 32-bit libraries for ModelSim need the
+Some dependencies are AUR packages (`libpng15`, and on plain Arch
+`ncurses5-compat-libs`; `libero-flexlm` if you want the local licence server), and the 32-bit libraries for ModelSim need the
 `multilib` repository. Install with an AUR helper such as `yay` or `paru`;
 `makepkg -s` alone cannot resolve AUR dependencies.
 
@@ -32,9 +34,11 @@ Arch `ncurses5-compat-libs`), and the 32-bit libraries for ModelSim need the
    12.5 GB download and 34 GB on disk; 50 GB must be free. Without a
    terminal, `--accept-eula` states that you have read and accept the
    agreement.
-3. Get the free licence: `libero-license hostid`, request it, then
+3. Licence server. On this machine: install `libero-flexlm`, then
+   `libero-license hostid`, request the free licence, and
    `sudo libero-license install License.dat` (see the `libero-flexlm`
-   README).
+   README). With an organisation server, see "Licence server elsewhere"
+   below instead.
 4. Start Libero from the menu, or with `libero [project.prjx | project dir]`.
 
 `sudo libero-setup status` checks the installation. `sudo libero-setup

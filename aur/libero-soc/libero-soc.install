@@ -6,7 +6,10 @@ post_install() {
          Microchip sign-in), waits for it, shows the licence agreement,
          then installs Libero SoC into /opt/microchip
          (about 15 minutes, 12.5 GB download)
-    2. Licence: libero-license hostid, then sudo libero-license install <License.dat>
+    2. Licence server: on this machine, install libero-flexlm and run
+         libero-license hostid, then sudo libero-license install <License.dat>
+       For your organisation's server, set LM_LICENSE_FILE,
+         SNPSLMD_LICENSE_FILE and SALT_LICENSE_SERVER to <port>@<server>
     Details: /usr/share/doc/libero-soc/README.md
 EOF
 }

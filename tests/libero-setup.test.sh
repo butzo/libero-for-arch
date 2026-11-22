@@ -172,6 +172,7 @@ run() {
 		LIBERO_SETUP_KNOWN_SHA256="${KNOWN_SHA:-none}" \
 		LIBERO_SETUP_WAIT=4 \
 		LIBERO_SETUP_PROGRESS_INTERVAL=1 \
+		LIBERO_SETUP_LICENSE_TOOL="${LICENSE_TOOL:-libero-license}" \
 		SUDO_USER=tester \
 		"$TOOL" "$@" </dev/null
 }
@@ -411,6 +412,27 @@ expect "status names the install" grep -q "$FAKEROOT/$TARGET_REL" <<<"$out"
 expect "status shows the accepted agreement" grep -q '99-000000' <<<"$out"
 rm "$FAKEROOT/etc/redhat-release"
 refuse "status fails when the redhat-release shim is missing" run status
+
+# --- licence hints: libero-flexlm is optional ---------------------------------
+
+fresh licence-local
+make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+printf '#!/bin/sh\nexit 0\n' >"$W/bin/fake-libero-license"
+chmod +x "$W/bin/fake-libero-license"
+out=$(LICENSE_TOOL=fake-libero-license run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin" 2>&1)
+expect "with libero-license, install names its next steps" grep -q 'libero-license hostid' <<<"$out"
+out=$(LICENSE_TOOL=fake-libero-license run status 2>&1)
+expect "with libero-license, status points to its status" grep -q 'libero-license status' <<<"$out"
+
+fresh licence-remote
+make_installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin"
+out=$(LICENSE_TOOL=no-such-licence-tool run install --accept-eula --installer "$W/downloads/Libero_SoC_2026.1_online_lin.bin" 2>&1)
+refuse "without libero-license, install does not name it" grep -q 'libero-license hostid' <<<"$out"
+expect "but offers the libero-flexlm package" grep -q 'libero-flexlm' <<<"$out"
+expect "and the variables for another server" grep -q 'SALT_LICENSE_SERVER' <<<"$out"
+out=$(LICENSE_TOOL=no-such-licence-tool run status 2>&1)
+refuse "without libero-license, status does not point to it" grep -q 'libero-license status' <<<"$out"
+expect "but says that no local server is installed" grep -q 'libero-flexlm' <<<"$out"
 
 refuse "an unknown command fails" run frobnicate
 

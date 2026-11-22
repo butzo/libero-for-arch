@@ -178,9 +178,11 @@ libstdc++ strategy options:
 
 Two packages (owner's decision, 2026-11-17): `libero-soc` for the software
 itself and `libero-flexlm` for the licence server. Names are subject to the
-AUR clash check. A Linux user always needs a licence server, so `libero-soc`
-should name `libero-flexlm` as a dependency or optional dependency; someone
-with a server on another machine can then leave it out.
+AUR clash check. Decided by the owner 2026-11-22: `libero-flexlm` is an
+optional dependency of `libero-soc`, because users with an organisation
+licence server do not need it. They set `LM_LICENSE_FILE`,
+`SNPSLMD_LICENSE_FILE` and `SALT_LICENSE_SERVER`; the wrapper keeps values
+already set. `libero-setup` names `libero-license` only when it is installed.
 
 ### Legal and AUR notes [inferred, not legal advice]
 

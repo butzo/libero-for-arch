@@ -1,14 +1,13 @@
 pkgbase = libero-soc
 	pkgdesc = Installer and Arch integration for Microchip Libero SoC (runs the vendor's installer; no vendor files included)
 	pkgver = 0.1.0
-	pkgrel = 3
+	pkgrel = 4
 	url = https://github.com/butzo/libero-for-arch
 	install = libero-soc.install
 	arch = x86_64
 	license = AGPL-3.0-or-later
 	checkdepends = shellcheck
 	checkdepends = zip
-	depends = libero-flexlm
 	depends = bash
 	depends = coreutils
 	depends = findutils
@@ -77,5 +76,6 @@ pkgbase = libero-soc
 	depends = expat
 	depends = bzip2
 	depends = xz
+	optdepends = libero-flexlm: licence server on this machine (not needed with an organisation licence server)
 
 pkgname = libero-soc

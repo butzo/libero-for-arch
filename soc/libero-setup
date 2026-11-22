@@ -29,7 +29,10 @@ WAIT_SECONDS=3600
 PROGRESS_INTERVAL=15
 PROGRESS_PID=""
 DOWNLOAD_DIR=""
+# The local licence server's tool, from the optional libero-flexlm package.
+LICENSE_TOOL=libero-license
 if [[ -n ${LIBERO_SETUP_TEST:-} ]]; then
+	LICENSE_TOOL=${LIBERO_SETUP_LICENSE_TOOL:-$LICENSE_TOOL}
 	ROOT=${LIBERO_SETUP_ROOT:-}
 	MIN_FREE_GB=${LIBERO_SETUP_MIN_FREE_GB:-$MIN_FREE_GB}
 	KNOWN_SHA256=${LIBERO_SETUP_KNOWN_SHA256:-$KNOWN_SHA256}
@@ -552,12 +555,28 @@ then run this again."
 	echo "$target" >"$STATE_DIR/install-dir"
 
 	info "Libero SoC $version installed in $target"
-	cat <<EOF
+	if has_license_tool; then
+		cat <<EOF
 Next:
   1. libero-license hostid            host ID for the free Silver licence
   2. sudo libero-license install <License.dat>
   3. Start Libero from the menu or with: libero
 EOF
+	else
+		cat <<EOF
+Next:
+  1. A licence server. For one on this machine, install the libero-flexlm
+     package and follow its instructions. For your organisation's server,
+     set LM_LICENSE_FILE, SNPSLMD_LICENSE_FILE and SALT_LICENSE_SERVER
+     to <port>@<server> before starting Libero.
+  2. Start Libero from the menu or with: libero
+EOF
+	fi
+}
+
+# has_license_tool: whether the libero-flexlm package's tool is installed.
+has_license_tool() {
+	command -v "$LICENSE_TOOL" >/dev/null 2>&1
 }
 
 cmd_remove() {
@@ -644,7 +663,11 @@ cmd_status() {
 		echo "udev:      vendor rule $VENDOR_UDEV_RULE makes Microchip USB devices world-writable; delete it"
 	fi
 	echo "IP cores:  downloaded per user into ~/.actel/vault"
-	echo "licence:   see 'sudo libero-license status'"
+	if has_license_tool; then
+		echo "licence:   see 'sudo libero-license status'"
+	else
+		echo "licence:   no local server (libero-flexlm not installed); Libero uses LM_LICENSE_FILE, SNPSLMD_LICENSE_FILE and SALT_LICENSE_SERVER"
+	fi
 	return "$healthy"
 }
 
