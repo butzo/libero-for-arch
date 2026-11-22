@@ -118,3 +118,5 @@ These are settled. Do not reopen them; implement them.
 | `/etc` files (2026-11-18) | The package owns `/etc/redhat-release` and `/etc/pki/tls/certs/ca-bundle.crt`. `/etc/cyusb.conf` stays the vendor's file; `libero-setup remove` cleans it up. The vendor's `88-cyusb.rules` is deleted after every install. |
 | Installer download (2026-11-18) | Microchip serves the web installer only to a signed-in account. `libero-setup install` opens the link in the user's browser, waits for the file in the user's download folder, verifies its pinned SHA-256 and continues. No handling of Microchip credentials; not in the PKGBUILD. `--installer FILE` remains for offline use. |
 | IP vault (2026-11-18) | Per user (`~/.actel/vault`, Libero's own fallback); no shared, group-writable vault. |
+| Licence server optional (2026-11-22) | `libero-flexlm` is an optional dependency of `libero-soc`; organisation-server users set the three licence variables instead. |
+| Publishing (2026-11-22) | Nothing goes public (AUR, ArchWiki talk page or article) until every test has passed, deferred ones included. The list is in `docs/archwiki/README.md`. |

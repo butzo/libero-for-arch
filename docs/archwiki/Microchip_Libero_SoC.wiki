@@ -1,0 +1,257 @@
+[[Category:Electronic design automation]]
+{{Related articles start}}
+{{Related|Intel Quartus Prime}}
+{{Related|Xilinx Vivado}}
+{{Related|Lattice Diamond}}
+{{Related|udev}}
+{{Related|NetworkManager}}
+{{Related articles end}}
+[https://www.microchip.com/Libero Libero SoC] is the design suite for Microchip FPGAs and SoC FPGAs such as PolarFire, PolarFire SoC, SmartFusion 2, IGLOO 2 and RTG4. It includes Synplify Pro for synthesis, Identify for debugging, ModelSim and QuestaSim for simulation, and the tools for place and route and for programming the devices.
+
+Arch Linux is not among the distributions supported by Microchip, which lists Red Hat Enterprise Linux and AlmaLinux 8 and 9 and Ubuntu 22.04 and 24.04 for version 2026.1. Libero SoC nevertheless runs on Arch Linux with a few adaptations, which this article describes for version 2026.1. Running it requires a licence; a free licence is available, see [[#Licensing]].
+
+== Installation ==
+
+Two packages from the [[AUR]] install and integrate Libero SoC. Neither contains Microchip software: the vendor installer is downloaded by the user and run by a setup tool, and the packages add what Arch Linux is missing. The packages are developed in the [https://github.com/butzo/libero-for-arch libero-for-arch] project, which also documents the findings behind each adaptation.
+
+* {{AUR|libero-soc}} provides the setup tool {{ic|libero-setup}}, the launcher {{ic|libero}}, a menu entry, a [[udev]] rule for the programmers and two compatibility files in {{ic|/etc}}, see [[#Changes to the system]].
+* {{AUR|libero-flexlm}} runs the licence server on the same machine, see [[#Local licence server]]. It is an optional dependency: with a licence server run by an organisation, it is not needed.
+
+Before installing, make sure that:
+
+* the official [[multilib]] repository is enabled: ModelSim is a 32-bit program;
+* at least 50 GB are free on the file system that holds {{ic|/opt}} and {{ic|/var/cache}};
+* a Microchip account is available: Microchip serves the installer only to signed-in users;
+* the machine has internet access during the installation: the installer downloads about 12.5 GB.
+
+=== Libero SoC ===
+
+[[Install]] the {{AUR|libero-soc}} package, then run the setup tool as root from the account that will use the web browser:
+
+ # libero-setup install
+
+The tool opens the download page of the web installer (a ZIP archive of about 200 MB) in the web browser of the user who called it, and waits up to one hour for the file to appear in that user's download directory. After signing in and saving the file there, the tool checks its SHA-256 checksum, shows Microchip's licence agreement in a pager and asks to type {{ic|I accept}}. In scripts, {{ic|--accept-eula}} states that the agreement has been read and accepted.
+
+The tool then runs the vendor installer without its graphical interface. It installs the component {{ic|Libero_SoC}}, which contains Libero, Synplify Pro, Identify, ModelSim and QuestaSim, into {{ic|/opt/microchip/Libero_SoC_''version''/}}. The installation takes about 15 minutes and uses 34 GB of disk space. SmartHLS, the offline IP catalogue MegaVault and the Remote Programming Service are not installed.
+
+The vendor installer logs to {{ic|/var/log/libero-soc/}}. To check the installation, run:
+
+ # libero-setup status
+
+=== Using a downloaded installer ===
+
+The installer can also be passed as a file, for example on a machine without a web browser or desktop, or when the file was downloaded on another computer:
+
+ # libero-setup install --installer ''/path/to/''libero_soc_2026.1_online_lin.zip
+
+Both the ZIP archive and the {{ic|Libero_SoC_''version''_online_lin.bin}} file inside it are accepted.
+
+{{Note|
+* The file passed this way is only the installer. The installer still downloads the software itself, about 12.5 GB, from Microchip during the installation, so internet access remains necessary.
+* Only the ZIP archive of the version known to the package is checked against its checksum. An archive of another version is used with a warning, and a {{ic|.bin}} file is used without a check.
+}}
+
+A copy of the installer is kept in {{ic|/var/cache/libero-soc/}}. A later {{ic|libero-setup install}} without {{ic|--installer}} uses that copy instead of opening the browser.
+
+=== Changes to the system ===
+
+The package and the setup tool change the following files outside {{ic|/opt/microchip}}:
+
+{| class="wikitable"
+! Path !! Purpose
+|-
+| {{ic|/etc/redhat-release}} || Contains {{ic|AlmaLinux release 9.6}}. The start script of Libero reads it to choose its library path; without it, Libero loads an old bundled {{ic|libstdc++}} that conflicts with the libraries of Arch Linux.
+|-
+| {{ic|/etc/pki/tls/certs/ca-bundle.crt}} || Link to {{ic|/etc/ssl/certs/ca-certificates.crt}}. The IP catalogue download looks for the CA certificates at this path.
+|-
+| {{ic|/usr/lib/udev/rules.d/70-libero-soc.rules}} || Gives the user at the seat access to Microchip programmers, see [[#Programmers]].
+|-
+| {{ic|/etc/udev/rules.d/88-cyusb.rules}} || Written by the vendor installer; it makes every Microchip USB device writable by all users. {{ic|libero-setup}} deletes it after each installation.
+|-
+| {{ic|/etc/cyusb.conf}} || Written by the vendor installer and needed by FlashPro6 programmers. It is kept; {{ic|libero-setup remove}} removes its FlashPro6 entry again.
+|}
+
+{{Warning|Other software that reads {{ic|/etc/redhat-release}} takes the system for AlmaLinux. {{ic|libero-setup}} moves the file aside while the vendor installer runs, because the installer's requirements check would otherwise try to run {{ic|yum}}.}}
+
+=== Upgrading to a newer version ===
+
+{{ic|libero-setup}} has no update command and keeps one Libero version installed at a time. To change versions, [[#Removing Libero SoC|remove]] the installed version, then install the new one with its installer. When the [[#Local licence server|local licence server]] is used, run {{ic|libero-license install}} again afterwards, so that it uses the licence daemons of the new version:
+
+ # libero-license install /var/lib/libero-flexlm/License.dat
+
+=== Manual installation ===
+
+Without the packages, the following adaptations are needed. The [https://github.com/butzo/libero-for-arch/blob/HEAD/docs/findings.md findings of the libero-for-arch project] describe each of them in detail.
+
+* '''Dependencies.''' The vendor installer needs {{AUR|libpng15}}. Libero and its tools need, besides common desktop libraries, {{Pkg|xorg-xwayland}}, {{Pkg|libxml2-legacy}}, {{Pkg|libxcrypt-compat}}, {{Pkg|gtk2}}, {{AUR|ncurses5-compat-libs}}, {{Pkg|numactl}}, {{Pkg|libtirpc}}, {{Pkg|gperftools}} and {{Pkg|pciutils}}, and for ModelSim {{Pkg|lib32-glibc}}, {{Pkg|lib32-gcc-libs}}, {{Pkg|lib32-libx11}}, {{Pkg|lib32-libxext}}, {{Pkg|lib32-libxrender}}, {{Pkg|lib32-libxft}} and {{Pkg|lib32-fontconfig}} from the official multilib repository. The {{ic|depends}} array of the {{AUR|libero-soc}} PKGBUILD holds the complete list.
+* '''Temporary space.''' The installer places its 12.5 GB download in {{ic|$TMPDIR}}. If {{ic|/tmp}} is a [[tmpfs]], point {{ic|TMPDIR}} at a directory on disk.
+The {{ic|.bin}} file inside the downloaded archive is a Qt Installer Framework installer and accepts its command line interface. To install without the graphical interface, run it as root, with {{ic|/etc/redhat-release}} absent and a target directory that does not exist yet:
+
+{{bc|1=
+# env TMPDIR=/var/tmp/libero-ifw ./Libero_SoC_2026.1_online_lin.bin -p minimal \
+    --root /opt/microchip/Libero_SoC_2026.1 --cache-path /var/tmp/libero-ifw/cache \
+    --no-default-installations --accept-licenses --accept-messages --confirm-command \
+    install Libero_SoC CommonDir=/opt/microchip/common LINUX_NO_SHORTCUTS=true
+}}
+
+{{ic|--no-default-installations}} leaves out SmartHLS, a default component, and {{ic|1=LINUX_NO_SHORTCUTS=true}} keeps the installer from writing menu entries for root. In this mode the licence agreement is not shown, so read it before using {{ic|--accept-licenses}}. After the installation:
+
+* '''Compatibility files.''' After the installation, create {{ic|/etc/redhat-release}} with the content {{ic|AlmaLinux release 9.6 (Sage Margay)}}, and link {{ic|/etc/pki/tls/certs/ca-bundle.crt}} to {{ic|/etc/ssl/certs/ca-certificates.crt}}, see [[#Changes to the system]].
+* '''Launcher.''' The bundled Qt has no Wayland plugin, so set {{ic|1=QT_QPA_PLATFORM=xcb}}, and set the [[#Licence server on another machine|licence variables]]. ModelSim opens its window only when Libero runs with a terminal as standard input; when Libero is started from a menu, run it through {{man|1|script}} to give it a pseudo-terminal. Call the vendor launcher {{ic|/opt/microchip/Libero_SoC_''version''/Libero_SoC/Designer/bin/libero}} by its full path; a symbolic link to it does not work.
+* '''Programmers.''' Add a udev rule as described in [[#Programmers]].
+
+== Known issues ==
+
+* Arch Linux is not supported by Microchip; problems cannot be reported to Microchip as such.
+* SmartHLS and the Remote Programming Service are not installed by {{ic|libero-setup}} and have not been tested on Arch Linux.
+
+== Licensing ==
+
+Libero SoC runs only with a licence from Microchip. On Linux only floating licences are available, which are served by a FlexLM licence server. The free ''Silver'' licence is valid for one year, can be renewed, and covers Libero, Synplify Pro, Identify, ModelSim and QuestaSim.
+
+=== Requesting a licence ===
+
+A floating licence is bound to the MAC address of a network adapter of the machine running the licence server, the ''host ID''. With {{AUR|libero-flexlm}} installed, list the candidates:
+
+ $ libero-license hostid
+
+The tool lists physical network adapters only, because the licence server ignores virtual ones. A built-in wired adapter is the most reliable choice. A Wi-Fi adapter works as well, but see [[#No licence after resuming from sleep]]. USB and dock adapters are marked as removable: the licence server only starts while the adapter is connected.
+
+Request the ''Libero Silver 1Yr Floating License for Windows/Linux Server'' for that host ID at [https://www.microchipdirect.com/fpga-software-products microchipDIRECT]. The licence file, {{ic|License.dat}}, arrives by e-mail.
+
+=== Local licence server ===
+
+[[Install]] the {{AUR|libero-flexlm}} package, then install the licence:
+
+ # libero-license install License.dat
+
+This checks that the host ID in the file belongs to a network adapter of this machine, sets the host name to {{ic|localhost}}, points the daemon lines to the licence daemons of the newest Libero installation, stores the result in {{ic|/var/lib/libero-flexlm/License.dat}}, and [[enable]]s and [[start]]s the following units:
+
+* {{ic|libero-flexlm.service}} runs the licence manager {{ic|lmgrd}} as the system user {{ic|libero-flexlm}}. Before starting, it waits until a network adapter carries the host ID.
+* {{ic|libero-flexlm-watchdog.timer}} checks every minute that the vendor daemons are running, and restarts the service if one is missing.
+* {{ic|libero-flexlm-resume.service}} restarts the service after resuming from sleep.
+
+The two additional units exist because a vendor daemon that starts while the host ID is not present exits and is not restarted by {{ic|lmgrd}}, see [[#No licence after resuming from sleep]]. With a licence bound to a built-in wired adapter they are not needed, and do no harm.
+
+To check the server, run:
+
+ # libero-license status
+
+The server log is in the [[journal]] of {{ic|libero-flexlm.service}}.
+
+{{Note|After each restart of the service, including the one after resuming, the tools have no licence for about a minute: {{ic|lmgrd}} waits until the kernel releases the licence port. {{ic|libero-license status}} shows this as ''waiting for port''.}}
+
+=== Licence server on another machine ===
+
+To use a licence server run by an organisation, {{AUR|libero-flexlm}} is not needed. Set the following [[environment variables]] to the port and host name of that server, in the form {{ic|''port''@''server''}}:
+
+* {{ic|LM_LICENSE_FILE}} for Libero;
+* {{ic|SNPSLMD_LICENSE_FILE}} for Synplify Pro and Identify;
+* {{ic|SALT_LICENSE_SERVER}} for ModelSim and QuestaSim.
+
+The {{ic|libero}} launcher keeps values that are already set, and uses {{ic|1702@localhost}} otherwise.
+
+{{Note|ModelSim and QuestaSim read only {{ic|SALT_LICENSE_SERVER}}; older names such as {{ic|MGLS_LICENSE_FILE}} are ignored.}}
+
+== Usage ==
+
+Start Libero from the application menu or from a terminal; a project file or a directory that contains exactly one project file can be given:
+
+ $ libero ''project''.prjx
+
+The launcher detaches Libero from the terminal and appends its output to {{ic|~/.cache/libero-soc/libero.log}}, which is the place to look when a tool started from Libero fails without a message.
+
+IP cores are downloaded by each user into {{ic|~/.actel/vault/}} when a design needs them.
+
+== Programmers ==
+
+The {{AUR|libero-soc}} package installs a udev rule that gives the user logged in at the seat access to USB devices with the Microchip vendor ID {{ic|1514}}, which covers FlashPro5, FlashPro6 and the embedded FlashPro5 of development kits. No group membership is needed. Without the package, create an equivalent rule:
+
+{{hc|/etc/udev/rules.d/70-microchip-flashpro.rules|2=
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1514", MODE="0660", TAG+="uaccess"
+}}
+
+Older FlashPro programmers are FTDI devices with the ID {{ic|0403:6001}}, which the package rule does not cover. As this ID is used by many FTDI serial adapters, add a rule for it only when such a programmer is used:
+
+{{hc|/etc/udev/rules.d/71-microchip-flashpro-ftdi.rules|2=
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0660", TAG+="uaccess"
+}}
+
+FlashPro6 programmers additionally need {{ic|/etc/cyusb.conf}}, which the vendor installer writes. Without it, Libero logs ''Cannot search for FP6 programmers'', which is harmless without FlashPro6 hardware.
+
+== Uninstallation ==
+
+The local licence server uses the licence daemons of the Libero installation, so remove it first.
+
+=== Removing the licence server ===
+
+[[pacman#Removing packages|Remove]] the {{AUR|libero-flexlm}} package; this disables and stops its units. The licence stays in {{ic|/var/lib/libero-flexlm/}}; delete the directory if the licence is no longer needed.
+
+=== Removing Libero SoC ===
+
+Remove the installation with the vendor uninstaller:
+
+ # libero-setup remove
+
+This also removes the empty {{ic|/opt/microchip/}} directories, the vendor's udev rule and the FlashPro6 entry in {{ic|/etc/cyusb.conf}}. With {{ic|--purge}}, it also removes the saved licence agreement, the cached installer and the logs. Then [[pacman#Removing packages|remove]] the {{AUR|libero-soc}} package.
+
+If the package was removed first, run the vendor uninstaller directly:
+
+ # /opt/microchip/Libero_SoC_''version''/maintenancetool -p minimal -d --confirm-command purge
+
+The tools keep settings and data in each user's home directory, which have to be removed by hand:
+
+* {{ic|~/.actel/}}: settings, the IP catalogue cache, and the IP cores in {{ic|~/.actel/vault/}};
+* {{ic|~/.config/Actel/}} and {{ic|~/.config/Microsemi/}}: tool settings;
+* {{ic|~/.modelsim}}: ModelSim window settings;
+* {{ic|~/.cache/libero-soc/}}: the launcher's log.
+
+== Tips and tricks ==
+
+=== Fixed Wi-Fi MAC address ===
+
+[[NetworkManager]] randomizes the MAC address of Wi-Fi adapters while scanning, which causes the problem described in [[#No licence after resuming from sleep]]. The packages leave this randomization enabled. It can be disabled for the adapter that carries the host ID, at a cost to privacy: the adapter then shows its real address to every network it scans. To do so, create a configuration file, replacing {{ic|wlan0}} with the name of the adapter:
+
+{{hc|/etc/NetworkManager/conf.d/libero-flexlm.conf|2=
+[device-libero-flexlm]
+match-device=interface-name:wlan0
+wifi.scan-rand-mac-address=no
+}}
+
+=== Restricting the licence server to this machine ===
+
+Like every FlexLM server, {{ic|lmgrd}} and the vendor daemons listen on all network interfaces, so other machines on the network can check out the licence. To accept only local connections, create a [[drop-in file]] for {{ic|libero-flexlm.service}}:
+
+{{hc|/etc/systemd/system/libero-flexlm.service.d/local.conf|2=
+[Service]
+IPAddressDeny=any
+IPAddressAllow=localhost
+}}
+
+Virtual machines and containers on the same host then no longer reach the server.
+
+== Troubleshooting ==
+
+=== No licence after resuming from sleep ===
+
+Libero reports that no valid licence is found, although the licence server is running. A vendor daemon checks the host ID when it starts; if the licence is bound to a Wi-Fi adapter whose address NetworkManager has just randomized, the daemon exits with ''Invalid host'' and {{ic|lmgrd}} does not start it again. This happens on most resumes from sleep. The units of {{AUR|libero-flexlm}} restart the server in this case; wait about a minute and check with {{ic|libero-license status}}. See also [[#Fixed Wi-Fi MAC address]].
+
+=== Simulation stops at "Starting Simulation..." ===
+
+When ModelSim fails to start from Libero, the log window shows nothing but ''Starting Simulation...''. Check {{ic|~/.cache/libero-soc/libero.log}}. Common causes are a missing {{ic|SALT_LICENSE_SERVER}} variable, see [[#Licence server on another machine]], and a Libero started without a pseudo-terminal, see [[#Manual installation]].
+
+=== Could not find the Qt platform plugin "wayland" ===
+
+The Qt libraries bundled with Libero contain only the X11 platform plugin. Set {{ic|1=QT_QPA_PLATFORM=xcb}} for Libero and install {{Pkg|xorg-xwayland}}. The {{ic|libero}} launcher of the package does this already.
+
+=== Programmer not found ===
+
+Check that the programmer is listed by {{man|8|lsusb}} and that the udev rule from [[#Programmers]] is in place; unplug and reconnect the programmer after adding a rule. The embedded FlashPro5 is a four-channel FTDI chip whose first channel is the JTAG interface. As of kernel 6.18, the {{ic|ftdi_sio}} driver binds only one of its serial channels and leaves the JTAG channel free. If {{ic|ftdi_sio}} is bound to interface 0 of the programmer, unbind it from that interface only; blacklisting the whole [[kernel module]] also removes the serial ports of the development board.
+
+== See also ==
+
+* [https://github.com/butzo/libero-for-arch libero-for-arch] – development of the {{AUR|libero-soc}} and {{AUR|libero-flexlm}} packages, with detailed findings
+* [https://www.microchip.com/Libero Libero SoC Design Suite] – downloads and documentation
+* [https://www.microchipdirect.com/fpga-software-products microchipDIRECT FPGA software products] – licence requests
+* Microchip: ''Libero SoC Installation and Licensing Setup User Guide'' (DS50003561)
+* Microchip: ''Libero SoC Linux Environment Setup User Guide''
