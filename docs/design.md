@@ -25,7 +25,7 @@ Two packages since 2026-11-17 (section 1a). `libero-soc`, in `soc/` and
 
 ```
 /usr/bin/libero                       wrapper: --version, --tool, env vars, pseudo-terminal (section 4)
-/usr/bin/libero-setup                 root tool: install | remove [VERSION] | status | refresh
+/usr/bin/libero-setup                 root tool: install | remove VERSION | status | refresh
 /usr/lib/libero-soc/installer.sh      sourced by libero-setup: download hand-off, checks
 /usr/lib/libero-soc/qres-extract      reads the agreement and icons from the installer by name
 /usr/lib/tmpfiles.d/libero-soc.conf   /var/lib, /var/cache and /var/log/libero-soc

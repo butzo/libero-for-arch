@@ -9,7 +9,7 @@
 #                        Without FILE: opens the installer download in your
 #                        browser and waits for it in your download folder.
 #                        FILE: a downloaded .zip, or the .bin inside it
-#   libero-setup remove [VERSION] [--purge]
+#   libero-setup remove VERSION [--purge]
 #   libero-setup status
 #   libero-setup refresh   recreate menu entries and icons (run by pacman)
 # shellcheck source-path=SCRIPTDIR
@@ -98,7 +98,7 @@ need_root() {
 }
 
 usage() {
-	sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"
+	sed -n '2,/^set -euo/{/^set -euo/d;/^# shellcheck/d;s/^# \{0,1\}//;p}' "$0"
 }
 
 # The default repository is named in the installer; using it directly avoids
@@ -535,8 +535,15 @@ cmd_remove() {
 	mapfile -t versions < <(installed_versions)
 	((${#versions[@]})) || die "nothing installed by libero-setup"
 	if [[ -z $version ]]; then
-		((${#versions[@]} == 1)) || die "several versions are installed (${versions[*]}); name the one to remove"
-		version=${versions[0]}
+		{
+			echo "libero-setup: name the version to remove. Installed:"
+			for version in "${versions[@]}"; do
+				echo "  $version in $(install_dir_of "$version")"
+				echo "      sudo libero-setup remove $version"
+			done
+			echo "Add --purge to remove the agreement record and the cached installer as well."
+		} >&2
+		exit 1
 	fi
 	is_installed "$version" || die "Libero $version is not installed by libero-setup (installed: ${versions[*]})"
 	dir=$(install_dir_of "$version")

@@ -402,7 +402,11 @@ expect "each version has its own menu entries" \
 out=$(run status 2>&1)
 expect "status lists both versions" grep -q '2026.1 in' <<<"$out"
 expect "and marks the newest as default" grep -q '2026.2 in .*(default)' <<<"$out"
+out=$(run remove 2>&1)
 refuse "remove without a version is refused while two are installed" run remove
+expect "the message gives the command for each installed version" \
+	grep -q 'sudo libero-setup remove 2026.1' <<<"$out"
+expect "for the other one too" grep -q 'sudo libero-setup remove 2026.2' <<<"$out"
 expect "remove names the version to remove" run remove 2026.1
 refuse "the removed version's tree is gone" test -e "$FAKEROOT/$TARGET_REL"
 refuse "and its menu entries" test -e "$FAKEROOT/$APPS/libero-soc-2026.1-libero.desktop"
@@ -411,7 +415,11 @@ expect "with its entries" test -f "$FAKEROOT/$APPS/libero-soc-2026.2-libero.desk
 expect "the shared common dir stays" test -d "$FAKEROOT/opt/microchip/common"
 expect "cyusb.conf stays while a version is installed" test -e "$FAKEROOT/etc/cyusb.conf"
 refuse "remove of a version that is not installed fails" run remove 2026.1
-expect "remove without a version works once one is left" run remove
+out=$(run remove 2>&1)
+refuse "remove without a version is refused even when only one is installed" run remove
+expect "the message lists the installed version" grep -q '2026.2' <<<"$out"
+expect "and gives the command to remove it" grep -q 'sudo libero-setup remove 2026.2' <<<"$out"
+expect "remove with the version works" run remove 2026.2
 refuse "now cyusb.conf is gone" test -e "$FAKEROOT/etc/cyusb.conf"
 
 # --- licence server -------------------------------------------------------------
@@ -463,7 +471,7 @@ install_version 2026.1
 S=$FAKEROOT/var/lib/libero-soc
 mv "$S/installs/2026.1/install-dir" "$S/"
 rm -rf "$S/installs"
-expect "remove also works on the old layout" run remove
+expect "remove also works on the old layout" run remove 2026.1
 refuse "and the tree is gone" test -e "$FAKEROOT/$TARGET_REL"
 
 # --- remove ------------------------------------------------------------------
@@ -472,7 +480,7 @@ fresh remove
 install_version 2026.1
 printf 'KERNEL=="*", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1514", MODE="666", TAG="cyusb_dev"\n' \
 	>"$FAKEROOT/etc/udev/rules.d/88-cyusb.rules"
-expect "remove succeeds" run remove
+expect "remove succeeds" run remove 2026.1
 expect "remove runs the vendor uninstaller" grep -q 'maintenancetool .*purge' "$W/installer-calls"
 refuse "the tree is gone" test -e "$FAKEROOT/$TARGET_REL"
 refuse "the empty common dir is gone" test -e "$FAKEROOT/opt/microchip/common"
@@ -483,14 +491,14 @@ refuse "the install dir record is gone" test -e "$FAKEROOT/$V/install-dir"
 refuse "the icons are gone" test -e "$FAKEROOT/$V/libero.xpm"
 refuse "the menu entries are gone" test -e "$FAKEROOT/$APPS/libero-soc-2026.1-libero.desktop"
 expect "the agreement record stays without --purge" test -e "$FAKEROOT/$V/eula-accepted"
-refuse "remove again fails: nothing installed" run remove
+refuse "remove again fails: nothing installed" run remove 2026.1
 
 fresh remove-keeps-foreign
 install_version 2026.1
 printf 'LogFile=cyusbd.log\nPIDFile=cyusb.pid\n<VPD>\n04b4 00f1 Other Cypress device\n1514 2009 Microsemi FP6 Programmer\n</VPD>\n' >"$FAKEROOT/etc/cyusb.conf"
 mkdir -p "$FAKEROOT/opt/microchip/common/vault/Components"
 mkdir -p "$FAKEROOT/opt/microchip/Libero_SoC_2025.2"
-expect "remove succeeds with other content around" run remove
+expect "remove succeeds with other content around" run remove 2026.1
 expect "a cyusb.conf with other devices is kept" grep -q '04b4 00f1' "$FAKEROOT/etc/cyusb.conf"
 refuse "but loses the FlashPro6 line" grep -q '1514 2009' "$FAKEROOT/etc/cyusb.conf"
 expect "a common dir with a vault in it is kept" test -d "$FAKEROOT/opt/microchip/common/vault"
@@ -499,27 +507,27 @@ expect "another version's tree is kept" test -d "$FAKEROOT/opt/microchip/Libero_
 fresh remove-tree-gone
 install_version 2026.1
 rm -rf "${FAKEROOT:?}/$TARGET_REL"
-expect "remove succeeds when the tree was deleted by hand" run remove
+expect "remove succeeds when the tree was deleted by hand" run remove 2026.1
 refuse "and clears the stale record" test -e "$FAKEROOT/$V/install-dir"
 expect "so that install works again" install_version 2026.1
 
 fresh remove-no-uninstaller
 install_version 2026.1
 rm "$FAKEROOT/$TARGET_REL/maintenancetool"
-out=$(run remove 2>&1)
-refuse "remove fails when the tree exists without its uninstaller" run remove
+out=$(run remove 2026.1 2>&1)
+refuse "remove fails when the tree exists without its uninstaller" run remove 2026.1
 expect "and names the command to delete it" grep -q 'rm -rf' <<<"$out"
 
 fresh cyusb-without-vpd
 install_version 2026.1
 printf 'Setting=from another tool\n' >"$FAKEROOT/etc/cyusb.conf"
-run remove >/dev/null 2>&1
+run remove 2026.1 >/dev/null 2>&1
 expect "a cyusb.conf with foreign content outside a VPD block is kept" \
 	grep -q 'another tool' "$FAKEROOT/etc/cyusb.conf"
 
 fresh remove-purge
 install_version 2026.1
-out=$(run remove --purge 2>&1)
+out=$(run remove --purge 2026.1 2>&1)
 expect "remove --purge succeeds" test -n "$out"
 refuse "--purge removes the agreement record" test -e "$FAKEROOT/$V/eula-accepted"
 refuse "--purge removes the cached installer" test -e "$FAKEROOT/var/cache/libero-soc/installer"
@@ -543,6 +551,9 @@ rm "$FAKEROOT/etc/redhat-release"
 refuse "status fails when the redhat-release shim is missing" run status
 
 refuse "an unknown command fails" run frobnicate
+out=$(run --help 2>&1)
+refuse "the help text shows no lint directives" grep -q 'shellcheck' <<<"$out"
+expect "the help text names remove with a version" grep -q 'remove VERSION' <<<"$out"
 
 echo "passed: $passed, failed: $failed"
 [ "$failed" -eq 0 ]

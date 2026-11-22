@@ -39,17 +39,20 @@ as `<wifi-mac>` refer to entries in that file.
 
 Open, in rough order:
 
-- Deferred tests: `libero-setup remove` on the real install; the progress
-  display on a real install; the browser hand-off on other desktops. Done
-  since: the programmer is found from the root-owned install (2026-11-20),
-  and the licence server was healthy after two days of normal use.
+- Deferred tests: the progress display on a real install; the browser
+  hand-off on other desktops. Done since: the programmer is found from the
+  root-owned install (2026-11-20), the licence server was healthy after two
+  days of normal use, all four menu entries start their tools, and
+  `libero-setup remove` worked on the real install (2026-11-22).
 - Side-by-side versions: built in 0.2.0, but only tested with stubs; a real
   second version needs a second Libero release, and its download link and
-  checksum added to `libero-setup`. Also untested: starting the MSS
-  Configurator, Program Debug and FPExpress from their entries.
-- Publishing: dependencies on plain Arch (test-plan.md item 5), release
-  tarball as PKGBUILD source. The names `libero-soc` and `libero-flexlm` are
-  free on the AUR (checked 2026-11-20).
+  checksum added to `libero-setup`.
+- A test on plain Arch, ideally a VM with a desktop: `gtk2` and
+  `ncurses5-compat-libs` come from the AUR there, `multilib` must be enabled,
+  and fonts and the kernel's `ftdi_sio` match are unchecked (findings.md
+  section 3, "Plain Arch compared with CachyOS").
+- Publishing: release tarball as PKGBUILD source. The names `libero-soc` and
+  `libero-flexlm` are free on the AUR (checked 2026-11-20).
 - The ArchWiki article, see the notes below.
 
 ## Notes for the ArchWiki article

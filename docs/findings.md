@@ -494,10 +494,53 @@ On the owner's machine, upgrading `libero-soc` from 0.1.0-3 to 0.2.0-1 ran
 `/var/lib/libero-soc/installs/2026.1/`, took the four icons from the cached
 installer and wrote the four entries. `libero-setup status` then showed
 "2026.1 ... (default)" with 4 entries and 4 icons; the licence server was
-unaffected. All four entries appear in the menu (reported by the owner).
-Not yet tried: starting each of the three tools other than Libero from its
-entry, and a real second version side by side (only 2026.1 exists; tested
-with stubs).
+unaffected. All four entries appear in the menu and start their tools
+(reported by the owner). Not yet tried: a real second version side by side
+(only 2026.1 exists; tested with stubs).
+
+`sudo libero-setup remove` on the owner's real install, 2026-11-22
+**[verified]**: the vendor uninstaller ran, the tree and the menu entries
+were removed, and the tool warned that the licence server had lost its
+daemons, since no other version was left. `libero-setup status` then
+reported "not installed". The libero-flexlm service is untouched by this;
+it needs `libero-license install` again after a new install. The run also
+showed two changes, made afterwards in `libero-setup`: `remove` now always
+asks for the version and lists the installed ones with the exact command
+for each; and the help text no longer shows a stray lint directive.
+
+### Plain Arch compared with CachyOS [doc, 2026-11-22]
+
+Every dependency of `libero-soc` checked against the official Arch package
+database and the AUR:
+
+- **AUR on plain Arch:** `gtk2` and `ncurses5-compat-libs` (both come from
+  the CachyOS repositories on the owner's machine), and `libpng15` (AUR
+  everywhere). An AUR helper builds them; `gtk2` takes a while to compile.
+- **`multilib`:** the seven `lib32-*` packages for the 32-bit ModelSim need
+  the `multilib` repository, which plain Arch does not enable by default.
+- Everything else is in `core` or `extra`.
+
+Further differences, not tested **[inferred]**:
+
+- **No desktop and no fonts** after a plain install. Libero is a GUI program;
+  a desktop session (Wayland with XWayland, or Xorg) and at least one font
+  package are needed. On a machine without a desktop, the parts that make
+  sense are the licence server (`libero-flexlm`, also as a floating-licence
+  server for other machines) and `libero-setup install` itself, which runs
+  the vendor installer without a display. Whether Libero's batch mode
+  (`libero SCRIPT:...`) runs without a display was not checked; `xvfb-run`
+  would be the fallback.
+- **No browser** on such a machine: `libero-setup install` prints the link;
+  the zip is downloaded elsewhere and passed with `--installer`.
+- **Network managers:** the Wi-Fi address randomisation that the licence
+  watchdog covers was seen with NetworkManager. `iwd` or
+  `systemd-networkd` behave differently; the watchdog works the same way,
+  but the frequency of the problem may differ.
+- **Kernel:** the `ftdi_sio` match that leaves the FlashPro5's JTAG interface
+  free was seen on the CachyOS LTS kernel; whether the plain Arch kernel has
+  the same match was not checked.
+
+### Hard-coded install paths [verified 2026-11-18]
 
 ### Hard-coded install paths [verified 2026-11-18]
 

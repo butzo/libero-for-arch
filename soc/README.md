@@ -38,7 +38,7 @@ Arch `ncurses5-compat-libs`), and the 32-bit libraries for ModelSim need the
 4. Start Libero from the menu, or with `libero [project.prjx | project dir]`.
 
 `sudo libero-setup status` checks the installation. `sudo libero-setup
-remove [VERSION]` runs the vendor's uninstaller; `--purge` also removes the
+remove VERSION` runs the vendor's uninstaller; `--purge` also removes the
 saved agreement, the cached installer and the logs.
 
 ## Several versions and the menu

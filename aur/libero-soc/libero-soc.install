@@ -23,7 +23,7 @@ pre_remove() {
 	for record in /var/lib/libero-soc/installs/*/install-dir /var/lib/libero-soc/install-dir; do
 		[ -s "$record" ] || continue
 		echo "==> Libero SoC is still installed in $(cat "$record")."
-		echo "    Remove it first with: sudo libero-setup remove"
+		echo "    Remove it first with: sudo libero-setup remove $(basename "$(cat "$record")" | sed 's/^Libero_SoC_//')"
 		echo "    Afterwards only by hand: sudo <that directory>/maintenancetool -p minimal -d --confirm-command purge"
 	done
 }

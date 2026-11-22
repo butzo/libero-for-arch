@@ -188,8 +188,10 @@ Done already: install-root listing, `du`, `Updates.xml` fetch, `--help`.
    Done 2026-11-18: the address is known but needs a Microchip login, see
    "Earlier notes" in findings.md section 3. No published checksum was
    found; `libero-setup` pins the SHA-256 of the owner's download.
-5. Done 2026-11-13, see "Dependency list" in section 4. Remaining: confirm
-   on plain Arch which of those packages are in the official repos.
+5. Done 2026-11-13, see "Dependency list" in section 4. Checked against the
+   official Arch database on 2026-11-22: all in `core`, `extra` or
+   `multilib` except `gtk2`, `ncurses5-compat-libs` and `libpng15` (AUR),
+   see "Plain Arch compared with CachyOS" in findings.md section 3.
 6. Done 2026-11-13 **[verified]**: `lmgrd` from `LicenseDaemons/` started
    with a temp copy of the owner's licence (daemon paths rewritten) and all
    three vendor daemons came up and listed their features, including
