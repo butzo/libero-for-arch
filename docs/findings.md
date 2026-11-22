@@ -525,8 +525,11 @@ until the end, so the vendor installer was still downloading.
   showed no prompt: the install of 2026-11-19 (953 s), pacman runs of
   1778 s and 369 s. Both failed runs came after longer gaps, so they
   prompted ("Enter Password or Place finger on fingerprint reader").
-- **Check.** A third run started 10 s after another sudo, without a prompt,
-  and was still downloading after 6.5 minutes (9.9 GB).
+- **Check.** A third run started 10 s after another sudo, without a prompt.
+  It was still downloading after 6.5 minutes (9.9 GB) and finished after
+  13 minutes 18 seconds (sudo session 20:51:10 to 21:04:28): `libero-setup
+  status` showed 2026.1 in `/opt/microchip/Libero_SoC_2026.1` with 4 menu
+  entries and 4 icons, and the owner reported the install as working.
 - **Setup.** `/etc/pam.d/sudo` starts with `pam_fprintd_grosshack.so`, which
   asks for the password and the finger at the same time.
 
