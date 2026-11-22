@@ -44,7 +44,19 @@ Open, in rough order:
 - Publishing: dependencies on plain Arch (test-plan.md item 5), release
   tarball as PKGBUILD source. The names `libero-soc` and `libero-flexlm` are
   free on the AUR (checked 2026-11-20).
-- The ArchWiki article, see the notes below.
+- The ArchWiki article: drafted 2026-11-22 in `docs/archwiki/` (branch
+  `docs-archwiki-article`). Publish only after the gate in
+  `docs/archwiki/README.md`; recheck the statements listed there.
+- Bug, found 2026-11-22, not fixed: `libero-setup install --installer
+  <file>.bin` runs a bare `.bin` as root **without any checksum check and
+  without a warning** (`prepare_installer` in `soc/libero-setup`, the `*)`
+  branch of the second `case`). The known `.zip` is verified against
+  `KNOWN_SHA256`, and any other `.zip` gets "no checksum is known ...; it
+  cannot be verified". Fix: give the `.bin` path the same warning, or verify
+  the `.bin` against a second pinned checksum (the `.bin` inside the known
+  zip). Add a test to `tests/libero-setup.test.sh` that passes a `.bin` and
+  expects the warning, and update the note in the article's "Using a
+  downloaded installer" section to match.
 
 ## Notes for the ArchWiki article
 

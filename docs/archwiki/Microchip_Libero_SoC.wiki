@@ -53,6 +53,8 @@ Both the ZIP archive and the {{ic|Libero_SoC_''version''_online_lin.bin}} file i
 
 A copy of the installer is kept in {{ic|/var/cache/libero-soc/}}. A later {{ic|libero-setup install}} without {{ic|--installer}} uses that copy instead of opening the browser.
 
+{{ic|libero-setup}} does not support an installation without internet access. After the installation, the network is still needed for IP cores, which Libero downloads when a design uses them; the offline IP catalogue MegaVault, a separate component of the vendor installer, is not installed. The [[#Local licence server|local licence server]] needs no network once the licence file is installed.
+
 === Changes to the system ===
 
 The package and the setup tool change the following files outside {{ic|/opt/microchip}}:
